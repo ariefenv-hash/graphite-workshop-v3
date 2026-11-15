@@ -1,0 +1,18 @@
+{
+  "name": "石墨工坊 · Graphite & Cedar",
+  "short_name": "石墨工坊",
+  "description": "铅笔文具制造与全球贸易模拟游戏",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FCF8F3",
+  "theme_color": "#B4690E",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%23B4690E'/%3E%3Cpath d='M52 140l14-42 64-64 28 28-64 64-42 14z' fill='%23FFF8EC'/%3E%3Cpath d='M52 140l9-27 18 18-27 9z' fill='%23292524'/%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
