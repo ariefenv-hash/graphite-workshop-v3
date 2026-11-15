@@ -1,0 +1,109 @@
+# 石墨工坊 · 自用 Debug APK 构建
+# 与仓库既有约定一致：只产出 APK / 不碰 gh-pages 分支与 Pages 部署。
+# 工具链版本全部钉死，避免 Vite 8 / TS 7 在 CI 上隐式漂移。
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'index.html'
+      - 'public/**'
+      - 'package.json'
+      - 'vite.config.ts'
+      - 'capacitor.config.json'
+      - '.github/workflows/build-apk.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-apk
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 安装 SDK 35 组件并接受许可
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools' > /dev/null
+
+      # 仓库刻意不提交 package-lock.json，这里沿用 npm install 且不写 lock；
+      # Capacitor 三件套钉死版本，避免与网页构建产物产生漂移。
+      - name: 安装 Web 依赖 + Capacitor 7.4.2
+        run: |
+          npm install --no-save --no-package-lock --no-audit --no-fund \
+            @capacitor/cli@7.4.2 @capacitor/core@7.4.2 @capacitor/android@7.4.2
+
+      - name: 构建 dist/
+        run: npm run build
+
+      # 不把 android/ 入库：每次由固定版本的 CLI 现场生成，工程可复现。
+      - name: 生成并同步 Android 工程
+        run: |
+          test -f dist/index.html || { echo 'dist/index.html 缺失'; exit 1; }
+          npx cap add android
+          npx cap sync android
+          grep -n 'compileSdkVersion\|targetSdkVersion\|minSdkVersion' android/variables.gradle
+
+      - name: Gradle assembleDebug
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: 收集产物
+        run: |
+          APK=$(find android/app/build/outputs/apk/debug -name '*.apk' -print -quit)
+          test -n "$APK" || { echo '未找到 APK'; exit 1; }
+          cp "$APK" graphite-workshop-v3-debug.apk
+          sha256sum graphite-workshop-v3-debug.apk
+          ls -lh graphite-workshop-v3-debug.apk
+          # 附带一份去掉中间产物的工程快照，方便本地用 Android Studio 二次开发
+          tar -czf android-project.tar.gz \
+            --exclude='android/build' --exclude='android/.gradle' \
+            --exclude='android/local.properties' --exclude='android/app/build' \
+            android/
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: graphite-workshop-v3-apk
+          path: |
+            graphite-workshop-v3-debug.apk
+            android-project.tar.gz
+          retention-days: 30
+
+      # 固定 tag，提供一个免登录、可长期复用的直链
+      - name: 发布到 apk-latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view apk-latest >/dev/null 2>&1; then
+            gh release upload apk-latest graphite-workshop-v3-debug.apk --clobber
+          else
+            gh release create apk-latest graphite-workshop-v3-debug.apk \
+              --title '石墨工坊 · Debug APK' \
+              --notes '由 Build Android APK 工作流自动构建，debug 签名，下载后直接安装即可。源码更新后重跑工作流会覆盖此 APK。'
+          fi

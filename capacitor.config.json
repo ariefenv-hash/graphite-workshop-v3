@@ -1,0 +1,9 @@
+{
+  "appId": "com.ariefenv.graphite",
+  "appName": "石墨工坊",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false
+  }
+}
