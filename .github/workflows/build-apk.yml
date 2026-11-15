@@ -78,20 +78,27 @@ jobs:
       - name: 类型检查
         run: npx tsc --noEmit
 
+      # 失败时把「尾部 6 行」压成单条 annotation：GitHub 每个 job 只保留 10 条
+      # annotation，之前用一条多行 ::error:: 会被拆行占满配额，真正报错反而被吞掉。
       - name: 构建 dist/
         run: |
-          if ! npm run build > /tmp/gw-build.log 2>&1; then
-            echo '---- vite build 输出 ----'
-            cat /tmp/gw-build.log
-            python3 - <<'PYLOG'
-import pathlib
-log = pathlib.Path('/tmp/gw-build.log').read_text(errors='replace')[-8000:]
-esc = log.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
-print('::error::' + esc)
-PYLOG
+          if ! NODE_OPTIONS=--max-old-space-size=4096 npm run build > /tmp/gw-build.log 2>&1; then
+            echo '---- vite build 输出（尾部 40 行） ----'
+            tail -n 40 /tmp/gw-build.log
+            cp /tmp/gw-build.log ./gw-build.log
+            python3 -c "import pathlib; L=pathlib.Path('/tmp/gw-build.log').read_text(errors='replace').splitlines()[-6:]; print('::error:: '+' | '.join(x.replace('%','%25') for x in L))"
             exit 1
           fi
           tail -n 12 /tmp/gw-build.log
+
+      - name: 失败时上传完整构建日志
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gw-build-log
+          path: gw-build.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       # 不把 android/ 入库：每次由固定版本的 CLI 现场生成，工程可复现。
       - name: 生成并同步 Android 工程
@@ -143,3 +150,19 @@ PYLOG
               --title '石墨工坊 · Debug APK' \
               --notes '由 Build Android APK 工作流自动构建，debug 签名，下载后直接安装即可。源码更新后重跑工作流会覆盖此 APK。'
           fi
+
+      # 网页与 APK 共用同一份 dist/：一次构建同步两端，避免站点停留在旧版。
+      - name: 同步 Pages（dist/ → gh-pages）
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          touch dist/.nojekyll
+          cd dist
+          git init -q
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -qm "deploy: sync v3 UI (${GITHUB_SHA::7})"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push -f origin HEAD:gh-pages
