@@ -134,3 +134,35 @@ debug 签名，下载后允许「未知来源」直接安装。Release 资产页
 最终 run `43691968830` 19 步全绿：APK 8,460,834 B（sha256 `2487d6cf…`）、
 `gh-pages` 同步 18 文件（`deploy: sync v3 UI (1e1b86f)`）。本地无头 Chromium 载入已部署站点，
 `#root` 渲染出完整 DOM（80,364 字符，含「制造车间」），白屏兜底未触发。
+
+## 十三、Android 12 以下降级链（修复 `MaterialYou.then()`）
+
+**现象**：Android 11 上弹出「Unhandled rejection / `MaterialYou.then()` is not implemented on android」，
+整个游戏界面被错误页顶掉。
+
+**根因**：`loadMaterialYouPlugin()` 是 `async` 函数，直接 `return mod.MaterialYou` —— 而
+`registerPlugin()` 返回的是 **thenable Proxy**。V8 对 async 返回值做 `PromiseResolve` 时会读 `.then`，
+Proxy 把 `then` 当成原生方法名去调用，原生端没有该方法 → 抛
+`"MaterialYou.then()" is not implemented on android`。旧兜底脚本又会把任何 unhandledrejection
+整页替换掉已挂载的 React，于是报错 = 界面消失。
+
+**三层修复**
+
+1. `capacitorClient.ts` 重写为 `probeSystemColors()`：Proxy **只存在局部变量，绝不 return**；
+   对外只返回纯数据 `{reason, sdkInt, payload}`。所有原生调用包 `try/catch` + 2.5s 超时，
+   函数**永不 reject**。
+2. `monetStore.ts` 按 `reason` 分级回退，任何分支都生成**完整浅/深两套色板**（不留 null）：
+   - `sdkInt >= 31` → Monet 完整 31 角色
+   - `27 <= sdkInt < 31`（Android 8.1–11）→ 壁纸种子色生成完整色板
+   - `sdkInt < 27` / 插件未注册 / 调用抛错 / `source=none` → 内置 graphite 种子色板
+   - 纯网页 → 内置色板 + 可上传壁纸截图取色
+   设置页直接显示当前处于哪种模式，用户手动截图取色的种子始终优先保留。
+3. `index.html` 兜底改为**非破坏式**：只有 `#root` 为空（真白屏）才整页显示错误；
+   React 已挂载时只在控制台留档，已知的 MaterialYou 类拒绝静默记录，绝不顶掉游戏。
+   所有 `void monetStore.xxx()` 改为 `safeProbe()/safeRefresh()` 包装。
+
+**验证**（无头 Chromium 载入已部署站点）：模拟 Android 原生桥但插件方法未实现 →
+`__gwErrors=[]`、游戏正常渲染、设置页显示「兼容模式 · 内置完整色板 /
+当前非原生环境 · 已回退到内置色板」；主动注入一条
+`Promise.reject(new Error('"MaterialYou.then()" is not implemented on android'))`
+后游戏界面仍完整、零 fatal、零提示条。**零未捕获拒绝**。
