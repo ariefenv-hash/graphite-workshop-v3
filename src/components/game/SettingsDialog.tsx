@@ -42,7 +42,7 @@ const THEME_OPTIONS: { value: ThemeId; label: string }[] = [
 ];
 
 const SOURCE_LABEL: Record<string, string> = {
-  none: '当前环境无原生桥，可用壁纸截图取色',
+  none: '兼容模式 · 内置完整色板',
   monet: 'Android 12+ · 系统完整 31 角色动态色板',
   wallpaper: 'Android 8.1–11 · 壁纸种子色生成',
   screenshot: '壁纸截图取色 · 与系统同取色管线',
@@ -202,10 +202,16 @@ export const SettingsDialog: React.FC<Props> = ({ open, onClose, onApplyTheme })
       <div className="rounded-2xl px-3.5 py-3 mb-3"
            style={{ backgroundColor: scheme.surfaceContainerLow, border: `1px solid ${scheme.outlineVariant}` }}>
         <div className="text-[13px] font-semibold">{monetStateText}</div>
+        {monet.note && (
+          <div className="text-[11px] mt-2 px-2.5 py-2 rounded-lg leading-relaxed"
+               style={{ backgroundColor: scheme.tertiaryContainer, color: scheme.onTertiaryContainer }}>
+            {monet.note}
+          </div>
+        )}
         <div className="text-[11px] mt-1 leading-relaxed" style={{ color: scheme.onSurfaceVariant }}>
           {monet.seedHex
             ? `当前种子色 ${monet.seedHex} · 浅/深两套色板已生成；回前台自动重探。`
-            : 'Android 12+ 直读系统壁纸动态色；8.1–11 走壁纸种子；纯浏览器可上传壁纸截图取色。无需权限，不改宿主 Activity 主题。'}
+            : 'Android 12+ 直读系统壁纸动态色；低于 12 或接口不可用时自动回退到内置完整色板；纯浏览器可上传壁纸截图取色。无需权限，不改宿主 Activity 主题。'}
         </div>
         <div className="flex flex-wrap gap-2 mt-3">
           <Md3Button size="sm" variant="tonal" onClick={() => onApplyTheme('monet')}>
@@ -215,7 +221,7 @@ export const SettingsDialog: React.FC<Props> = ({ open, onClose, onApplyTheme })
                      onClick={() => screenshotInput.current?.click()}>
             <ImagePlus className="w-3.5 h-3.5" /> 从壁纸截图取色
           </Md3Button>
-          <Md3Button size="sm" variant="text" onClick={() => void monetStore.refresh()}>
+          <Md3Button size="sm" variant="text" onClick={() => monetStore.safeRefresh()}>
             <RefreshCw className="w-3.5 h-3.5" /> 重新探测
           </Md3Button>
         </div>

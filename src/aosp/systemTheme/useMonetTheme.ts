@@ -16,7 +16,7 @@ export function useMonetTheme(): MonetState {
   useSyncExternalStore(monetStore.subscribe, monetStore.getSnapshot, monetStore.getSnapshot);
 
   useEffect(() => {
-    void monetStore.probe();
+    monetStore.safeProbe();
   }, []);
 
   return monetStore.getSnapshot();

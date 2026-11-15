@@ -14,34 +14,70 @@
     <!-- 字体全部本地化：APK / WebView 下零外部请求，杜绝外链挂起阻塞 module script 导致的白屏 -->
     <link rel="stylesheet" href="./fonts/fonts.css" />
 
-    <!-- 白屏兜底：任何 JS 解析/运行时错误都直接画出来，而不是留一片纯白 -->
+    <!-- 启动兜底：只有 React 真正没挂载（纯白屏）才整页显示错误。
+         已挂载后的一切后台异常只留一条短提示，绝不把游戏界面顶掉。 -->
     <script>
       (function () {
         var shown = false;
-        function reveal(title, detail) {
-          if (shown) return; shown = true;
+        var errors = [];
+        window.__gwErrors = errors;
+        function esc(s) {
+          return String(s).replace(/[&<>]/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c];
+          });
+        }
+        function fatalPage(title, detail) {
           var root = document.getElementById('root');
           if (!root) return;
           root.innerHTML = '<div style="font:14px/1.7 system-ui,sans-serif;padding:24px;color:#3D2000;background:#FAF6EE;min-height:100vh;box-sizing:border-box">' +
             '<h2 style="margin:0 0 8px;font-size:18px">石墨工坊未能启动</h2>' +
             '<p style="margin:0 0 12px;color:#5F554D">把下面这段截图发回来即可定位，页面不再纯白。</p>' +
             '<pre style="white-space:pre-wrap;word-break:break-all;background:#F1E7D8;padding:12px;border-radius:12px;margin:0 0 12px">' +
-            String(title).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]}) + '\n' +
-            String(detail).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]}) + '</pre>' +
+            esc(title) + '\n' + esc(detail) + '</pre>' +
             '<p style="margin:0;color:#8B7E74;font-size:12px">UA: ' + navigator.userAgent + '</p></div>';
         }
+        function warnBar(title, detail) {
+          if (shown) return;
+          shown = true;
+          var bar = document.createElement('div');
+          bar.setAttribute('data-gw-warn', '1');
+          bar.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:9999;' +
+            'font:12px/1.5 system-ui,sans-serif;padding:10px 14px;border-radius:12px;' +
+            'background:#3D2000;color:#FFF8EC;box-shadow:0 8px 24px rgba(0,0,0,.28);pointer-events:none;opacity:.96';
+          bar.textContent = title + ' · ' + String(detail).slice(0, 160);
+          document.body.appendChild(bar);
+          setTimeout(function () {
+            if (bar.parentNode) bar.parentNode.removeChild(bar);
+          }, 6000);
+        }
+        function report(title, detail, fatal) {
+          errors.push({ title: title, detail: String(detail), fatal: !!fatal, at: Date.now() });
+          var root = document.getElementById('root');
+          if (!fatal && root && root.innerHTML.trim()) {
+            warnBar(title, detail);
+            return;
+          }
+          fatalPage(title, detail);
+        }
         window.addEventListener('error', function (e) {
-          if (e && e.message) reveal('Error: ' + e.message, (e.filename||'') + ':' + (e.lineno||''));
+          if (e && e.message) report('Error: ' + e.message, (e.filename || '') + ':' + (e.lineno || ''), false);
         }, true);
         window.addEventListener('unhandledrejection', function (e) {
-          reveal('Unhandled rejection', String(e && e.reason || e));
+          var msg = String((e && e.reason) || e);
+          // 低版本 Android 无系统动态色接口：主题层已自动降级，此处只留档、不打断游戏。
+          if (/MaterialYou|capacitor-material-you|not implemented on android/i.test(msg)) {
+            errors.push({ title: 'system-theme-fallback', detail: msg, fatal: false, at: Date.now() });
+            if (e && e.preventDefault) e.preventDefault();
+            return;
+          }
+          report('Unhandled rejection', msg, false);
         });
         setTimeout(function () {
           var root = document.getElementById('root');
           if (root && !root.innerHTML.trim()) {
-            reveal('React 未挂载（4 秒超时）',
+            report('React 未挂载（4 秒超时）',
               '可能是 WebView 不支持产物 JS 语法，或本地资源被拦截。\n' +
-              'href=' + location.href + '\nreadyState=' + document.readyState);
+              'href=' + location.href + '\nreadyState=' + document.readyState, true);
           }
         }, 4000);
       })();
