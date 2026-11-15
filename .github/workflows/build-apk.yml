@@ -83,9 +83,12 @@ jobs:
           if ! npm run build > /tmp/gw-build.log 2>&1; then
             echo '---- vite build 输出 ----'
             cat /tmp/gw-build.log
-            while IFS= read -r line; do
-              echo "::error::${line}"
-            done < <(tail -n 45 /tmp/gw-build.log)
+            python3 - <<'PYLOG'
+import pathlib
+log = pathlib.Path('/tmp/gw-build.log').read_text(errors='replace')[-8000:]
+esc = log.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+print('::error::' + esc)
+PYLOG
             exit 1
           fi
           tail -n 12 /tmp/gw-build.log
