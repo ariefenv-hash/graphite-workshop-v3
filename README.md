@@ -35,7 +35,9 @@ npm run lint     # tsc --noEmit
 - 固定直链：https://github.com/ariefenv-hash/graphite-workshop-v3/releases/download/apk-latest/graphite-workshop-v3-debug.apk
 - 或到 Actions → `Build Android APK` → 最新 run 的 `graphite-workshop-v3-debug.apk` 产物
 
-debug 签名，下载后允许「未知来源」直接安装；后续重跑工作流会覆盖同名 Release 资产，需覆盖安装。
+debug 签名，下载后允许「未知来源」直接安装。Release 资产页提供 sha256，可自行校验。
+
+> **注意**：CI 每次在全新 runner 上生成新的 debug keystore，重跑工作流后签名会变，**不能直接覆盖安装**，需先卸载旧版。若要长期覆盖升级，另配固定 keystore 做 release 签名。
 
 **工作流做什么**
 
