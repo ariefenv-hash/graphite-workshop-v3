@@ -217,7 +217,7 @@ export async function initPersonalization(s: GwSettings, surfaceHex: string): Pr
   try {
     const font = await getAsset('customFont');
     if (font) {
-      fontUrl = URL.createObjectURL(font);
+      fontUrl = URL.createObjectURL(file);
       const face = new FontFace('GwCustomFont', `url("${fontUrl}")`);
       await face.load();
       document.fonts.add(face);

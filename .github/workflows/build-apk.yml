@@ -63,6 +63,17 @@ jobs:
           npm install --no-save --no-package-lock --no-audit --no-fund \
             @capacitor/cli@7.4.2 @capacitor/core@7.4.2 @capacitor/android@7.4.2
 
+      # file: 本地依赖在 npm install --no-save 下偶发被跳过，显式兜底一次；
+      # cap sync 依据其 package.json 的 capacitor 字段注册 Java 插件。
+      - name: 校验 Material You 原生插件
+        run: |
+          if [ ! -f node_modules/capacitor-material-you/package.json ]; then
+            npm install --no-save --no-package-lock --no-audit --no-fund ./local_modules/capacitor-material-you
+          fi
+          test -f node_modules/capacitor-material-you/package.json
+          test -f node_modules/capacitor-material-you/android/src/main/java/com/materialyou/capacitor/MaterialYouPlugin.java
+          node --input-type=commonjs -e "const p=require('./node_modules/capacitor-material-you/package.json'); if(!p.capacitor?.android?.src) process.exit(1); console.log('plugin:', p.name, p.version)"
+
       # 权威类型检查：Vite 只做转译不查类型，设置页全量 MD3 化后必须显式跑一次。
       - name: 类型检查
         run: npx tsc --noEmit

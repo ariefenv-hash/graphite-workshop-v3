@@ -101,7 +101,10 @@ export const Md3StretchContainer: React.FC<Md3StretchContainerProps> = ({
   const wheelReleaseRef = useRef<number | null>(null);
 
   const { topEdgeRef, bottomEdgeRef, visualScale, snap, updateVisual, ensureTick } =
-    useStretchEdgeController(onPullProgress, mode === 'pull' ? 4.2 : 1.35);
+    useStretchEdgeController(
+      onPullProgress ? (snap) => onPullProgress(snap.distance, snap.state) : undefined,
+      mode === 'pull' ? 4.2 : 1.35
+    );
 
   useEffect(() => {
     const el = hostRef.current;
