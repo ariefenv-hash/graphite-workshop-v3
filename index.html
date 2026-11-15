@@ -11,9 +11,41 @@
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <!-- 字体全部本地化：APK / WebView 下零外部请求，杜绝外链挂起阻塞 module script 导致的白屏 -->
+    <link rel="stylesheet" href="./fonts/fonts.css" />
+
+    <!-- 白屏兜底：任何 JS 解析/运行时错误都直接画出来，而不是留一片纯白 -->
+    <script>
+      (function () {
+        var shown = false;
+        function reveal(title, detail) {
+          if (shown) return; shown = true;
+          var root = document.getElementById('root');
+          if (!root) return;
+          root.innerHTML = '<div style="font:14px/1.7 system-ui,sans-serif;padding:24px;color:#3D2000;background:#FAF6EE;min-height:100vh;box-sizing:border-box">' +
+            '<h2 style="margin:0 0 8px;font-size:18px">石墨工坊未能启动</h2>' +
+            '<p style="margin:0 0 12px;color:#5F554D">把下面这段截图发回来即可定位，页面不再纯白。</p>' +
+            '<pre style="white-space:pre-wrap;word-break:break-all;background:#F1E7D8;padding:12px;border-radius:12px;margin:0 0 12px">' +
+            String(title).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]}) + '\n' +
+            String(detail).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]}) + '</pre>' +
+            '<p style="margin:0;color:#8B7E74;font-size:12px">UA: ' + navigator.userAgent + '</p></div>';
+        }
+        window.addEventListener('error', function (e) {
+          if (e && e.message) reveal('Error: ' + e.message, (e.filename||'') + ':' + (e.lineno||''));
+        }, true);
+        window.addEventListener('unhandledrejection', function (e) {
+          reveal('Unhandled rejection', String(e && e.reason || e));
+        });
+        setTimeout(function () {
+          var root = document.getElementById('root');
+          if (root && !root.innerHTML.trim()) {
+            reveal('React 未挂载（4 秒超时）',
+              '可能是 WebView 不支持产物 JS 语法，或本地资源被拦截。\n' +
+              'href=' + location.href + '\nreadyState=' + document.readyState);
+          }
+        }, 4000);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

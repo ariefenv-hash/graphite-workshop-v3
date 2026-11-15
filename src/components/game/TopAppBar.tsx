@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Info, Moon, Palette, Sun, Volume2, VolumeX } from 'lucide-react';
+import { Info, Moon, Palette, Settings2, Sun, Volume2, VolumeX } from 'lucide-react';
 import { useMd3Theme } from '../../aosp/ThemeContext';
 import { Md3RippleSurface } from '../md3/Md3RippleSurface';
 
@@ -16,6 +16,7 @@ interface TopAppBarProps {
   onToggleDark: () => void;
   onToggleSound: () => void;
   onOpenBaseline: () => void;
+  onOpenSettings: () => void;
 }
 
 export const TopAppBar: React.FC<TopAppBarProps> = ({
@@ -26,6 +27,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
   onToggleDark,
   onToggleSound,
   onOpenBaseline,
+  onOpenSettings,
 }) => {
   const { scheme, darkMode } = useMd3Theme();
 
@@ -104,6 +106,17 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
           style={{ color: scheme.onSurfaceVariant }}
         >
           {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+        </Md3RippleSurface>
+
+        <Md3RippleSurface
+          onClick={onOpenSettings}
+          cornerRadius={20}
+          aria-label="打开设置"
+          title="设置 · 个性化与常用选项"
+          className="min-h-[40px] min-w-[40px] rounded-full cursor-pointer"
+          style={{ color: scheme.onSurfaceVariant }}
+        >
+          <Settings2 className="w-4 h-4" />
         </Md3RippleSurface>
 
         <Md3RippleSurface

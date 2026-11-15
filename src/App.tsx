@@ -16,6 +16,8 @@ import { TopAppBar } from './components/game/TopAppBar';
 import { TradeWorkspace } from './components/game/TradeWorkspace';
 import { Md3RippleSurface } from './components/md3/Md3RippleSurface';
 import { Md3Snackbar } from './components/md3/Md3Snackbar';
+import { SettingsDialog } from './components/game/SettingsDialog';
+import { loadSettings, initPersonalization } from './game/settings';
 import { useWorkshopStore } from './game/useWorkshopStore';
 
 const THEME_CYCLE: ThemeId[] = ['cedar', 'graphite', 'prussian'];
@@ -29,6 +31,17 @@ const WorkshopShell: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<NavTab>('factory');
   const [baselineOpen, setBaselineOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    const s = loadSettings();
+    document.documentElement.style.setProperty('--gw-font-scale', String(s.fontScale));
+    if (s.fontScale !== 1) document.documentElement.classList.add('gw-scaled');
+    if (s.followSystemDark && typeof window !== 'undefined' && window.matchMedia) {
+      setDarkMode(window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+    void initPersonalization(s, scheme.surface);
+  }, []);
 
   useEffect(() => {
     if (state.themeId && state.themeId !== themeId) {
@@ -79,6 +92,7 @@ const WorkshopShell: React.FC = () => {
           store.updateAccessibility('soundEnabled', !state.accessibility.soundEnabled)
         }
         onOpenBaseline={() => setBaselineOpen(true)}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
 
       <div className="flex-1 flex w-full max-w-[1440px] mx-auto">
@@ -225,6 +239,12 @@ const WorkshopShell: React.FC = () => {
       />
 
       <AospBaselineDialog open={baselineOpen} onClose={() => setBaselineOpen(false)} />
+
+      <SettingsDialog
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onApplyTheme={(id) => { store.setThemeSelection(id); setThemeId(id); }}
+      />
 
       <Md3Snackbar messages={store.snackbars} />
     </div>

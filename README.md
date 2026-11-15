@@ -57,3 +57,19 @@ debug 签名，下载后允许「未知来源」直接安装。Release 资产页
 - 启动图标 / 启动屏为 Capacitor 默认资源，未生成专属图标
 - Google Fonts 外链在联网时正常，离线时回退 `system-ui`（与网页版一致）
 - 应用 ID `com.ariefenv.graphite` 一经发布不可更改，自用阶段可先在 `capacitor.config.json` 调整
+
+## v3.1 · APK 白屏修复与个性化设置
+
+**白屏根因与修复**：`index.html` 原本用阻塞式 `<link rel="stylesheet">` 加载 Google Fonts。实测外链在 WebView 中若 TLS 握手挂起（而非快速失败，开代理也可能出现），会一直阻塞后面的 `type="module"` 脚本，React 永远不挂载 → 纯白屏。对照实验：外链快速失败/9 秒后失败均正常渲染（非白像素 63%），**永久挂起则 rootLen=0、白屏**。
+
+三处同时加固：
+
+1. **字体全部本地化** —— `public/fonts/` 内 19 个 woff2 + `fonts.css`，零外部请求。中文默认 **思源宋体 Noto Serif SC**（源码全字符 ∪ GB2312 一级字，按批子集化并自造 `unicode-range`，浏览器按需只加载命中批次）；标题拉丁字形 Bricolage Grotesque、等宽 JetBrains Mono。
+2. **产物语法降级** —— `vite.config.ts` 加 `build.target: 'es2020'`。默认产物含 `??=` 等 ES2021 语法（acorn 按 ecmaVersion 2020 解析失败），老 Android System WebView 会直接 SyntaxError 白屏。
+3. **白屏兜底** —— `index.html` 内联脚本捕获 `error` / `unhandledrejection`，并在 4 秒后检测 `#root` 是否为空；异常时把错误信息、UA、href 画到页面上，便于截图定位，不再是纯白。
+
+**设置页**（顶栏齿轮图标）：壁纸上传 / 模糊半径 / 背景压暗 / 从壁纸自动提取主色并应用到强调色 / 手动改色 / 上传自定义字体 / 界面字号 / 交互音量（主增益节点）/ 震动 / 深色模式 / 跟随系统深浅色 / 减弱动效 / 抑制强闪光 / 漆色主题 / 清空个性化数据。配置走 localStorage，壁纸与字体走 IndexedDB，与游戏存档隔离。
+
+> **系统动态主题色**：Android Monet / `wallpaperColors` 没有 Web 标准接口，WebView 内读不到，按约定跳过；仅保留可用的 `prefers-color-scheme` 跟随系统深浅色。
+
+> 图标沿用 lucide 的 JSX `<svg>`，React 自动绑定 `http://www.w3.org/2000/svg` 命名空间，避免老 WebView 动态创建 SVG 不显示。

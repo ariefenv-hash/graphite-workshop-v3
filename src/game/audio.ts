@@ -5,6 +5,28 @@
 
 class WorkshopAudioEngine {
   private ctx: AudioContext | null = null;
+  private master: GainNode | null = null;
+  private volume = 0.7;
+
+  /** 交互音量 0..1，设置页实时调整（作用于所有音效的主增益节点）。 */
+  setMasterVolume(v: number): void {
+    this.volume = Math.max(0, Math.min(1, v));
+    if (this.master && this.ctx) {
+      this.master.gain.setTargetAtTime(this.volume, this.ctx.currentTime, 0.015);
+    }
+  }
+  getMasterVolume(): number { return this.volume; }
+
+  private connectOut(node: AudioNode): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    if (!this.master) {
+      this.master = ctx.createGain();
+      this.master.gain.value = this.volume;
+      this.master.connect(ctx.destination);
+    }
+    node.connect(this.master);
+  }
 
   private ensureContext(): AudioContext | null {
     if (typeof window === 'undefined') return null;
@@ -34,7 +56,7 @@ class WorkshopAudioEngine {
     gain.gain.setValueAtTime(0.06, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    this.connectOut(gain);
     osc.start(now);
     osc.stop(now + 0.055);
   }
@@ -65,7 +87,7 @@ class WorkshopAudioEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
     }
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    this.connectOut(gain);
     osc.start(now);
     osc.stop(now + 0.17);
   }
@@ -83,7 +105,7 @@ class WorkshopAudioEngine {
     gain.gain.setValueAtTime(0.09, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    this.connectOut(gain);
     osc.start(now);
     osc.stop(now + 0.09);
   }
@@ -102,7 +124,7 @@ class WorkshopAudioEngine {
       gain.gain.setValueAtTime(0.08, start);
       gain.gain.exponentialRampToValueAtTime(0.001, start + 0.25);
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      this.connectOut(gain);
       osc.start(start);
       osc.stop(start + 0.26);
     });
@@ -127,7 +149,7 @@ class WorkshopAudioEngine {
       gain.gain.setValueAtTime(peak, start);
       gain.gain.exponentialRampToValueAtTime(0.001, start + 0.22);
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      this.connectOut(gain);
       osc.start(start);
       osc.stop(start + 0.24);
     });
