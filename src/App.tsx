@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Compass, Factory, FlaskConical } from 'lucide-react';
 import { MD3_SCHEMES, ThemeId } from './aosp/md3Tokens';
 import { RippleMaskShape } from './aosp/RippleShader';
@@ -16,32 +16,26 @@ import { TopAppBar } from './components/game/TopAppBar';
 import { TradeWorkspace } from './components/game/TradeWorkspace';
 import { Md3RippleSurface } from './components/md3/Md3RippleSurface';
 import { Md3Snackbar } from './components/md3/Md3Snackbar';
+import { useWorkshopStore } from './game/useWorkshopStore';
 import { SettingsDialog } from './components/game/SettingsDialog';
 import { loadSettings, initPersonalization } from './game/settings';
-import { useWorkshopStore } from './game/useWorkshopStore';
+import { Md3StretchContainer } from './components/md3/Md3StretchContainer';
 
-const THEME_CYCLE: ThemeId[] = ['cedar', 'graphite', 'prussian'];
+const THEME_CYCLE: ThemeId[] = ['cedar', 'graphite', 'prussian', 'monet'];
 
 type NavTab = 'factory' | 'trade' | 'research';
 
 const WorkshopShell: React.FC = () => {
-  const { scheme, themeId, darkMode, setThemeId, setDarkMode } = useMd3Theme();
+  const { scheme, themeId, darkMode, setThemeId, setDarkMode, monet, applyScreenshotSeed } = useMd3Theme();
   const store = useWorkshopStore();
   const { state } = store;
 
   const [activeTab, setActiveTab] = useState<NavTab>('factory');
   const [baselineOpen, setBaselineOpen] = useState(false);
+  const screenshotInputRef = useRef<HTMLInputElement>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-
-  useEffect(() => {
-    const s = loadSettings();
-    document.documentElement.style.setProperty('--gw-font-scale', String(s.fontScale));
-    if (s.fontScale !== 1) document.documentElement.classList.add('gw-scaled');
-    if (s.followSystemDark && typeof window !== 'undefined' && window.matchMedia) {
-      setDarkMode(window.matchMedia('(prefers-color-scheme: dark)').matches);
-    }
-    void initPersonalization(s, scheme.surface);
-  }, []);
+  /** 用户手动选过主题后，当前会话内不再自动覆盖为手机主题。 */
+  const manualThemeRef = useRef(false);
 
   useEffect(() => {
     if (state.themeId && state.themeId !== themeId) {
@@ -49,12 +43,61 @@ const WorkshopShell: React.FC = () => {
     }
   }, [state.themeId, themeId, setThemeId]);
 
+  // 个性化设置（壁纸 / 字体 / 音量 / 涟漪档位）启动时恢复一次。
+  useEffect(() => {
+    const s0 = loadSettings();
+    void initPersonalization(s0, scheme.surface);
+  }, [scheme.surface]);
+
+  // 手机主题自动覆盖：原生桥 / 壁纸种子就绪且用户未手动选过主题时，
+  // 自动切到 monet。store 内回调均稳定，只需响应探测状态与当前主题。
+  useEffect(() => {
+    if (
+      monet.status === 'ready' &&
+      (monet.source === 'monet' || monet.source === 'wallpaper') &&
+      !manualThemeRef.current &&
+      themeId !== 'monet'
+    ) {
+      setThemeId('monet');
+      store.setThemeSelection('monet');
+      store.pushSnackbar(`已自动应用手机主题：${monet.lightScheme?.lacquerName ?? 'Material You 动态色'}`);
+    }
+  }, [monet.status, monet.source, monet.lightScheme, themeId, setThemeId]);
+
   const handleCycleTheme = () => {
     const idx = THEME_CYCLE.indexOf(themeId);
     const next = THEME_CYCLE[(idx + 1) % THEME_CYCLE.length];
+
+    // 浏览器环境走到「手机主题」且还没有任何种子色：打开壁纸截图选择器
+    // （内置 canvas 取色降级；Capacitor 环境下原生/壁纸路径已就绪，不会走到这里）。
+    if (next === 'monet' && monet.source === 'none' && monet.seedHex === null) {
+      screenshotInputRef.current?.click();
+      return;
+    }
+
+    manualThemeRef.current = true;
     store.setThemeSelection(next);
     setThemeId(next);
-    store.pushSnackbar(`已切换动态配色：${MD3_SCHEMES[next].light.lacquerName}`);
+    const nextLabel =
+      next === 'monet'
+        ? (monet.lightScheme?.lacquerName ?? MD3_SCHEMES.monet.light.lacquerName)
+        : MD3_SCHEMES[next].light.lacquerName;
+    store.pushSnackbar(`已切换动态配色：${nextLabel}`);
+  };
+
+  const handleScreenshotPicked = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      await applyScreenshotSeed(file);
+      manualThemeRef.current = true;
+      store.setThemeSelection('monet');
+      setThemeId('monet');
+      store.pushSnackbar('已从截图提取壁纸主题色并应用');
+    } catch {
+      store.pushSnackbar('截图取色失败，请换一张壁纸截图重试');
+    }
   };
 
   const navItems: { id: NavTab; label: string; icon: React.ReactNode; badge?: number }[] = [
@@ -142,6 +185,8 @@ const WorkshopShell: React.FC = () => {
 
         {/* Main Workspace Viewport */}
         <main className="flex-1 p-4 sm:p-6 pb-24 lg:pb-8 min-w-0">
+          {/* 页面级前级滑动：与木料仓同一套 AOSP EdgeEffect 弹簧，不改滚动结构 */}
+          <Md3StretchContainer mode="window" className="min-h-full">
           {activeTab === 'factory' && (
             <FactoryWorkspace
               state={state}
@@ -181,6 +226,7 @@ const WorkshopShell: React.FC = () => {
               onResetSave={store.resetProgress}
             />
           )}
+          </Md3StretchContainer>
         </main>
       </div>
 
@@ -238,13 +284,24 @@ const WorkshopShell: React.FC = () => {
         onDismiss={store.dismissOfflineReport}
       />
 
+      {/* 手机主题降级入口：壁纸截图选择器（canvas 取色，隐藏触发） */}
+      <input
+        ref={screenshotInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        aria-hidden="true"
+        tabIndex={-1}
+        onChange={handleScreenshotPicked}
+      />
+
       <AospBaselineDialog open={baselineOpen} onClose={() => setBaselineOpen(false)} />
 
-      <SettingsDialog
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        onApplyTheme={(id) => { store.setThemeSelection(id); setThemeId(id); }}
-      />
+        <SettingsDialog
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          onApplyTheme={(id) => { store.setThemeSelection(id); setThemeId(id); }}
+        />
 
       <Md3Snackbar messages={store.snackbars} />
     </div>

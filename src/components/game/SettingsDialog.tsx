@@ -1,18 +1,32 @@
 /**
  * 设置 · 常用项与个性化。
- * 自包含 UI（原生控件 + inline MD3 配色），不依赖业务组件 props，便于在 APK / 网页双端一致运行。
- * 图标沿用 lucide 的 JSX <svg>，React 自动绑定 http://www.w3.org/2000/svg 命名空间。
+ *
+ * 全部控件改用项目内已移植的 MD3 组件（Md3Dialog / Md3Switch / Md3Slider /
+ * Md3Button / Md3SegmentedButton），不再使用原生 <input type=range> 与自绘
+ * 46×26 开关；内容滚动走 Md3StretchContainer(mode=scroll) 的 AOSP EdgeEffect，
+ * 与雪松木料仓同一套欠阻尼弹簧，只是强度不同。
+ *
+ * 系统动态色：通过集成的 capacitor-material-you 插件桥接（Android 12+ 完整
+ * 31 角色 / 8.1–11 壁纸种子 / 浏览器截图取色），全部在设置内可操作。
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, ImagePlus, Palette, RotateCcw, Type, Volume2, X } from 'lucide-react';
-import { ThemeId, MD3_SCHEMES } from '../../aosp/md3Tokens';
+import {
+  ImagePlus, Palette, RotateCcw, Type, Volume2, Smartphone,
+  RefreshCw, Sun, Moon, Sparkles, SlidersHorizontal,
+} from 'lucide-react';
+import { ThemeId } from '../../aosp/md3Tokens';
 import { useMd3Theme } from '../../aosp/ThemeContext';
+import { monetStore } from '../../aosp/systemTheme/monetStore';
 import { workshopAudio, triggerHaptic } from '../../game/audio';
 import {
   DEFAULT_SETTINGS, GwSettings, applySettings, clearPersonalization,
-  extractAccent, initPersonalization, loadSettings, saveSettings,
+  extractAccent, getAsset, loadSettings, saveSettings,
   setCustomFont, setWallpaper,
 } from '../../game/settings';
+import { Md3Dialog } from '../md3/Md3Dialog';
+import { Md3Switch } from '../md3/Md3Switch';
+import { Md3Slider } from '../md3/Md3Slider';
+import { Md3Button, Md3SegmentedButton } from '../md3/Md3Button';
 
 interface Props {
   open: boolean;
@@ -20,42 +34,86 @@ interface Props {
   onApplyTheme: (id: ThemeId) => void;
 }
 
-const THEMES: { id: ThemeId; label: string }[] = [
-  { id: 'cedar', label: '经典加州雪松黄' },
-  { id: 'graphite', label: '石墨深色' },
-  { id: 'prussian', label: '普鲁士蓝' },
+const THEME_OPTIONS: { value: ThemeId; label: string }[] = [
+  { value: 'cedar', label: '雪松黄' },
+  { value: 'graphite', label: '石墨' },
+  { value: 'prussian', label: '普鲁士蓝' },
+  { value: 'monet', label: '手机主题' },
 ];
 
+const SOURCE_LABEL: Record<string, string> = {
+  none: '当前环境无原生桥，可用壁纸截图取色',
+  monet: 'Android 12+ · 系统完整 31 角色动态色板',
+  wallpaper: 'Android 8.1–11 · 壁纸种子色生成',
+  screenshot: '壁纸截图取色 · 与系统同取色管线',
+};
+
+/** 把手动选中的 hex 变成一张纯色图，复用系统同款 QuantizerCelebi 取色管线。 */
+async function seedBlobFromHex(hex: string): Promise<Blob> {
+  const c = document.createElement('canvas');
+  c.width = 8; c.height = 8;
+  const ctx = c.getContext('2d');
+  if (!ctx) throw new Error('canvas 不可用');
+  ctx.fillStyle = hex;
+  ctx.fillRect(0, 0, 8, 8);
+  return await new Promise<Blob>((resolve, reject) => {
+    c.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob 失败'))), 'image/png');
+  });
+}
+
 export const SettingsDialog: React.FC<Props> = ({ open, onClose, onApplyTheme }) => {
-  const { scheme, darkMode, setDarkMode, reducedMotion, setReducedMotion,
-          noFlashVisuals, setNoFlashVisuals, themeId, setCustomAccent, customAccent } = useMd3Theme();
+  const {
+    scheme, themeId, darkMode, darkFollowsSystem, setDarkMode, resetDarkModeOverride,
+    reducedMotion, setReducedMotion, noFlashVisuals, setNoFlashVisuals,
+    monet, applyScreenshotSeed,
+  } = useMd3Theme();
+
   const [s, setS] = useState<GwSettings>(() => loadSettings());
   const [hint, setHint] = useState('');
+  const [busy, setBusy] = useState(false);
   const wallpaperInput = useRef<HTMLInputElement>(null);
   const fontInput = useRef<HTMLInputElement>(null);
+  const screenshotInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
     const cur = loadSettings();
     setS(cur);
-    initPersonalization(cur, scheme.surface);
-  }, [open]);
+    applySettings(cur, scheme.surface);
+    // 资源恢复由 App 启动时统一跑一次（initPersonalization），此处只同步 CSS/音频。
+  }, [open, scheme.surface]);
+
+  const flash = (note: string) => {
+    setHint(note);
+    window.setTimeout(() => setHint(''), 2800);
+  };
 
   const update = (patch: Partial<GwSettings>, note?: string) => {
     const next = { ...s, ...patch };
     setS(next); saveSettings(next);
     applySettings(next, scheme.surface);
-    if (patch.accentHex !== undefined && s.autoAccent) setCustomAccent(patch.accentHex || null);
-    if (patch.autoAccent !== undefined) setCustomAccent(patch.autoAccent ? (s.accentHex || null) : null);
-    if (note) { setHint(note); window.setTimeout(() => setHint(''), 2600); }
+    if (note) flash(note);
+  };
+
+  const applySeedAndTheme = async (blob: Blob): Promise<void> => {
+    await applyScreenshotSeed(blob);
+    onApplyTheme('monet');
   };
 
   const onWallpaper = async (f: File | undefined) => {
     if (!f) return;
-    const hex = await setWallpaper(f);
-    const patch: Partial<GwSettings> = { wallpaperOn: true };
-    if (s.autoAccent && hex) patch.accentHex = hex;
-    update(patch, hex && s.autoAccent ? `已提取主色 ${hex}` : '壁纸已应用');
+    setBusy(true);
+    try {
+      const hex = await setWallpaper(f);
+      const patch: Partial<GwSettings> = { wallpaperOn: true };
+      if (hex) patch.accentHex = hex;
+      if (s.autoAccent) {
+        try { await applySeedAndTheme(f); } catch { /* 取色失败仍应用壁纸 */ }
+      }
+      update(patch, s.autoAccent && hex ? `壁纸已应用 · 主色 ${hex} 已生成完整色板` : '壁纸已应用');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const onFont = async (f: File | undefined) => {
@@ -65,175 +123,238 @@ export const SettingsDialog: React.FC<Props> = ({ open, onClose, onApplyTheme })
   };
 
   const reExtract = async () => {
-    // 从已保存的壁纸重新取色（不重新上传）
-    const blob = await import('../../game/settings').then((m) => m.getAsset('wallpaper'));
-    if (!blob) { setHint('当前没有壁纸'); return; }
+    const blob = await getAsset('wallpaper');
+    if (!blob) { flash('当前没有壁纸'); return; }
     const hex = await extractAccent(blob);
-    update({ accentHex: hex, autoAccent: true }, `已重新提取 ${hex}`);
+    try { await applySeedAndTheme(blob); } catch { /* 保留手动色 */ }
+    update({ accentHex: hex, autoAccent: true }, `已重新提取 ${hex} 并应用`);
+  };
+
+  const onManualColor = async (hex: string) => {
+    update({ accentHex: hex, autoAccent: false });
+    try {
+      await applySeedAndTheme(await seedBlobFromHex(hex));
+      flash(`已用 ${hex} 生成完整动态色板`);
+    } catch {
+      flash(`已记录 ${hex}（色板生成失败，可改用壁纸取色）`);
+    }
+  };
+
+  const onScreenshotPicked = async (f: File | undefined) => {
+    if (!f) return;
+    setBusy(true);
+    try {
+      await applySeedAndTheme(f);
+      flash('已从壁纸截图提取主题色并应用');
+    } catch {
+      flash('截图取色失败，请换一张壁纸截图重试');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const resetAll = async () => {
     await clearPersonalization();
     const d = { ...DEFAULT_SETTINGS };
-    setS(d); saveSettings(d); setCustomAccent(null);
+    setS(d); saveSettings(d);
     setReducedMotion(false); setNoFlashVisuals(false);
     applySettings(d, scheme.surface);
-    setHint('个性化数据已清空，字体回落内置思源宋体');
-    window.setTimeout(() => setHint(''), 3000);
+    flash('个性化数据已清空，字体回落内置思源宋体');
   };
 
-  if (!open) return null;
-
-  const card: React.CSSProperties = { backgroundColor: scheme.surfaceContainerLow, color: scheme.onSurface };
-  const sub: React.CSSProperties = { color: scheme.onSurfaceVariant };
-  const sec = (title: string, icon: React.ReactNode) => (
-    <div className="flex items-center gap-2 mt-5 mb-2">
+  const section = (title: string, icon: React.ReactNode) => (
+    <div className="flex items-center gap-2 mt-6 mb-3">
       <span style={{ color: scheme.primary }}>{icon}</span>
-      <h3 className="text-[11px] font-bold tracking-[1.6px] uppercase" style={sub}>{title}</h3>
+      <h3 className="text-[11px] font-bold tracking-[1.6px] uppercase"
+          style={{ color: scheme.onSurfaceVariant }}>{title}</h3>
+      <span className="flex-1 h-px" style={{ backgroundColor: scheme.outlineVariant }} />
     </div>
   );
-  const row = (label: string, desc: string, control: React.ReactNode) => (
-    <div className="flex items-center justify-between gap-3 py-2.5" style={{ borderBottom: `1px solid ${scheme.outlineVariant}` }}>
-      <div className="min-w-0 flex-1">
-        <div className="text-[13px] font-semibold">{label}</div>
-        <div className="text-[11px] leading-snug mt-0.5" style={sub}>{desc}</div>
-      </div>
-      <div className="shrink-0">{control}</div>
-    </div>
-  );
-  const slider = (v: number, min: number, max: number, onChange: (n: number) => void) => (
-    <input type="range" min={min} max={max} value={v}
-      onChange={(e) => onChange(Number(e.target.value))}
-      className="w-[128px] accent-current cursor-pointer" style={{ accentColor: scheme.primary }} />
-  );
-  const toggle = (v: boolean, onChange: (b: boolean) => void) => (
-    <button type="button" role="switch" aria-checked={v} onClick={() => onChange(!v)}
-      className="w-[46px] h-[26px] rounded-full relative transition-colors cursor-pointer shrink-0"
-      style={{ backgroundColor: v ? scheme.primary : scheme.surfaceContainerHighest }}>
-      <span className="absolute top-[3px] w-5 h-5 rounded-full bg-white shadow transition-all"
-        style={{ left: v ? 23 : 3 }} />
-    </button>
-  );
-  const chip = (label: string, onClick: () => void, active = false) => (
-    <button type="button" onClick={onClick}
-      className="px-3 py-1.5 rounded-full text-[11px] font-semibold cursor-pointer border"
-      style={{ backgroundColor: active ? scheme.primaryContainer : scheme.surface,
-               color: active ? scheme.onPrimaryContainer : scheme.onSurface,
-               borderColor: scheme.outlineVariant }}>
-      {active && <Check className="w-3 h-3 inline mr-1" />}{label}
-    </button>
-  );
+
+  const monetStateText = monet.status !== 'ready'
+    ? '正在探测系统动态色…'
+    : (SOURCE_LABEL[monet.source] ?? monet.source);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-         style={{ backgroundColor: 'rgba(20,16,13,.58)' }} onClick={onClose}>
-      <div className="w-full sm:max-w-[540px] max-h-[88vh] overflow-y-auto rounded-t-[28px] sm:rounded-[28px] shadow-2xl pb-safe"
-           style={card} onClick={(e) => e.stopPropagation()}>
-        {/* 标题栏 */}
-        <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4"
-             style={{ backgroundColor: scheme.surfaceContainerLow, borderBottom: `1px solid ${scheme.outlineVariant}` }}>
-          <div>
-            <h2 className="text-lg font-bold font-display">设置</h2>
-            <p className="text-[11px]" style={sub}>常用项 · 个性化 · 声音与显示</p>
-          </div>
-          <button type="button" onClick={onClose} aria-label="关闭设置"
-            className="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer"
-            style={{ backgroundColor: scheme.surfaceContainerHighest, color: scheme.onSurface }}>
-            <X className="w-4 h-4" />
-          </button>
+    <Md3Dialog
+      open={open}
+      onClose={onClose}
+      title="设置"
+      maxWidthClass="max-w-[560px]"
+      actions={
+        <>
+          <Md3Button size="sm" variant="text" onClick={() => void resetAll()}>
+            <RotateCcw className="w-3.5 h-3.5" /> 清空个性化
+          </Md3Button>
+          <Md3Button size="sm" variant="filled" onClick={onClose}>完成</Md3Button>
+        </>
+      }
+    >
+      {hint && (
+        <div className="mb-3 px-3 py-2 rounded-xl text-[12px] font-medium"
+             style={{ backgroundColor: scheme.primaryContainer, color: scheme.onPrimaryContainer }}>
+          {hint}
         </div>
+      )}
 
-        <div className="px-5 pb-6">
-          {hint && <div className="mt-3 px-3 py-2 rounded-xl text-[12px] font-medium"
-                        style={{ backgroundColor: scheme.primaryContainer, color: scheme.onPrimaryContainer }}>{hint}</div>}
-
-          {/* 个性化 · 壁纸 */}
-          {sec('个性化 · 壁纸', <ImagePlus className="w-4 h-4" />)}
-          {row('自定义壁纸', '作为整个界面背景，图片存在本机，完全离线可用',
-            toggle(s.wallpaperOn, (v) => update({ wallpaperOn: v })))}
-          <div className="flex flex-wrap gap-2 py-2">
-            {chip('上传壁纸', () => wallpaperInput.current?.click())}
-            {chip('重新提取主色', reExtract)}
-            {chip('清除壁纸', () => update({ wallpaperOn: false }, '已关闭壁纸'))}
-            <input ref={wallpaperInput} type="file" accept="image/*" className="hidden"
-                   onChange={(e) => { void onWallpaper(e.target.files?.[0]); e.target.value = ''; }} />
-          </div>
-          {row('模糊半径', `${s.wallpaperBlur} px`, slider(s.wallpaperBlur, 0, 40, (n) => update({ wallpaperBlur: n })))}
-          {row('背景压暗', `${s.wallpaperDim}%（越高越保证文字可读）`,
-            slider(s.wallpaperDim, 0, 95, (n) => update({ wallpaperDim: n })))}
-
-          {/* 主题色 */}
-          {sec('主题色', <Palette className="w-4 h-4" />)}
-          {row('从壁纸自动取色', '上传后分析主色并应用到全界面强调色',
-            toggle(s.autoAccent, (v) => update({ autoAccent: v })))}
-          <div className="flex items-center gap-3 py-2.5" style={{ borderBottom: `1px solid ${scheme.outlineVariant}` }}>
-            <span className="text-[13px] font-semibold">当前强调色</span>
-            <span className="w-6 h-6 rounded-full border" style={{ backgroundColor: s.accentHex, borderColor: scheme.outline }} />
-            <span className="text-[11px] font-mono-tabular" style={sub}>{s.accentHex}</span>
-            <input type="color" value={s.accentHex} aria-label="手动选择强调色"
-              onChange={(e) => update({ accentHex: e.target.value, autoAccent: false })}
-              className="ml-auto w-9 h-9 rounded-lg cursor-pointer bg-transparent border-0 p-0" />
-          </div>
-          <div className="flex flex-wrap gap-2 py-2">
-            {THEMES.map((t) => chip(t.label, () => onApplyTheme(t.id), themeId === t.id))}
-          </div>
-          <p className="text-[11px] leading-relaxed mt-1 px-1 py-2 rounded-lg"
-             style={{ ...sub, backgroundColor: scheme.surfaceContainerHighest }}>
-            系统动态主题色（Android Monet / wallpaperColors）没有 Web 标准接口，WebView 内无法读取，按约定跳过；
-            上方「跟随系统深浅色」覆盖可用的系统级联动。
-          </p>
-          {customAccent && <div className="text-[11px] mt-1" style={sub}>自定义强调色生效中 · 切换漆色主题仍保留</div>}
-
-          {/* 字体 */}
-          {sec('字体', <Type className="w-4 h-4" />)}
-          <div className="text-[12px] leading-relaxed py-2" style={sub}>
-            中文默认 <b style={{ color: scheme.onSurface }}>思源宋体（Noto Serif SC）</b>，字体文件已打进包内，
-            无网络也能显示；标题拉丁字形用 Bricolage Grotesque。
-          </div>
-          {row('使用上传字体', '支持 TTF / OTF / WOFF / WOFF2',
-            toggle(s.customFontOn, (v) => update({ customFontOn: v })))}
-          <div className="flex flex-wrap gap-2 py-2">
-            {chip('上传字体', () => fontInput.current?.click())}
-            {chip('恢复思源宋体', () => update({ customFontOn: false }, '已恢复内置思源宋体'))}
-            <input ref={fontInput} type="file" accept=".ttf,.otf,.woff,.woff2,font/*" className="hidden"
-                   onChange={(e) => { void onFont(e.target.files?.[0]); e.target.value = ''; }} />
-          </div>
-          {row('界面字号', `${Math.round(s.fontScale * 100)}%`,
-            slider(Math.round(s.fontScale * 100), 90, 130, (n) => update({ fontScale: n / 100 })))}
-
-          {/* 声音与触感 */}
-          {sec('声音与触感', <Volume2 className="w-4 h-4" />)}
-          {row('交互音量', `${Math.round(s.volume * 100)}%（顶栏音量键仍控制总开关）`,
-            slider(Math.round(s.volume * 100), 0, 100, (n) => update({ volume: n / 100 })))}
-          <div className="flex flex-wrap gap-2 py-2">
-            {chip('试听一下', () => workshopAudio.playLatheBeat(true))}
-            {chip('震动反馈', () => triggerHaptic(true, 12))}
-          </div>
-          {row('触感震动', '节拍 / 精修 / 提醒的短震',
-            toggle(s.haptics, (v) => update({ haptics: v })))}
-
-          {/* 显示与交互 */}
-          {sec('显示与交互', <Palette className="w-4 h-4" />)}
-          {row('深色模式', '当前：' + (darkMode ? '深色' : '浅色'),
-            toggle(darkMode, (v) => setDarkMode(v)))}
-          {row('跟随系统深浅色', '读取 prefers-color-scheme（重启后生效）',
-            toggle(s.followSystemDark, (v) => update({ followSystemDark: v })))}
-          {row('减弱动效', '压缩过渡与弹簧动画时长',
-            toggle(s.reducedMotion, (v) => { setReducedMotion(v); update({ reducedMotion: v }); }))}
-          {row('抑制强闪光', '降低涟漪金粉与高亮闪动',
-            toggle(noFlashVisuals, (v) => setNoFlashVisuals(v)))}
-
-          {/* 数据 */}
-          {sec('数据与关于', <RotateCcw className="w-4 h-4" />)}
-          <div className="text-[11px] leading-relaxed py-2" style={sub}>
-            v3 · Graphite &amp; Cedar · 本地校验存档。个性化配置与游戏进度分开保存，清空不会影响银元与产量。
-            内置 AOSP RippleShader / StretchEdge / Expressive 弹簧物理。
-          </div>
-          <div className="flex flex-wrap gap-2 pt-1">
-            {chip('清空个性化数据', () => { void resetAll(); })}
-          </div>
+      {/* ---------------------------------------------- 手机主题 · Material You */}
+      {section('手机主题 · Material You', <Smartphone className="w-4 h-4" />)}
+      <div className="rounded-2xl px-3.5 py-3 mb-3"
+           style={{ backgroundColor: scheme.surfaceContainerLow, border: `1px solid ${scheme.outlineVariant}` }}>
+        <div className="text-[13px] font-semibold">{monetStateText}</div>
+        <div className="text-[11px] mt-1 leading-relaxed" style={{ color: scheme.onSurfaceVariant }}>
+          {monet.seedHex
+            ? `当前种子色 ${monet.seedHex} · 浅/深两套色板已生成；回前台自动重探。`
+            : 'Android 12+ 直读系统壁纸动态色；8.1–11 走壁纸种子；纯浏览器可上传壁纸截图取色。无需权限，不改宿主 Activity 主题。'}
         </div>
+        <div className="flex flex-wrap gap-2 mt-3">
+          <Md3Button size="sm" variant="tonal" onClick={() => onApplyTheme('monet')}>
+            <Palette className="w-3.5 h-3.5" /> 应用手机主题
+          </Md3Button>
+          <Md3Button size="sm" variant="outlined" disabled={busy}
+                     onClick={() => screenshotInput.current?.click()}>
+            <ImagePlus className="w-3.5 h-3.5" /> 从壁纸截图取色
+          </Md3Button>
+          <Md3Button size="sm" variant="text" onClick={() => void monetStore.refresh()}>
+            <RefreshCw className="w-3.5 h-3.5" /> 重新探测
+          </Md3Button>
+        </div>
+        <input ref={screenshotInput} type="file" accept="image/*" className="hidden" aria-hidden="true"
+               onChange={(e) => { void onScreenshotPicked(e.target.files?.[0]); e.target.value = ''; }} />
       </div>
-    </div>
+      <div className="mb-3">
+        <Md3SegmentedButton<ThemeId>
+          ariaLabel="漆色主题"
+          options={THEME_OPTIONS}
+          value={themeId}
+          onChange={(id) => onApplyTheme(id)}
+        />
+      </div>
+      <Md3Switch
+        label="跟随系统深浅色"
+        description="由原生 uiMode / prefers-color-scheme 决定；关闭后由下方开关手动覆盖"
+        checked={darkFollowsSystem}
+        onChange={(v) => (v ? resetDarkModeOverride() : setDarkMode(darkMode))}
+      />
+      <Md3Switch
+        label="深色模式"
+        description={darkFollowsSystem ? '当前跟随系统；开启此项即变为手动覆盖' : '手动覆盖值会持久化'}
+        checked={darkMode}
+        onChange={(v) => setDarkMode(v)}
+        showUncheckedIcon={false}
+      />
+
+      {/* ------------------------------------------------------ 个性化 · 壁纸 */}
+      {section('个性化 · 壁纸', <ImagePlus className="w-4 h-4" />)}
+      <Md3Switch
+        label="自定义壁纸"
+        description="作为整个界面背景，图片存在本机，完全离线可用"
+        checked={s.wallpaperOn}
+        onChange={(v) => update({ wallpaperOn: v }, v ? '已开启壁纸' : '已关闭壁纸')}
+      />
+      <div className="flex flex-wrap gap-2 py-2">
+        <Md3Button size="sm" variant="tonal" disabled={busy}
+                   onClick={() => wallpaperInput.current?.click()}>
+          <ImagePlus className="w-3.5 h-3.5" /> 上传壁纸
+        </Md3Button>
+        <Md3Button size="sm" variant="outlined" onClick={() => void reExtract()}>
+          <Sparkles className="w-3.5 h-3.5" /> 重新提取主色
+        </Md3Button>
+        <input ref={wallpaperInput} type="file" accept="image/*" className="hidden" aria-hidden="true"
+               onChange={(e) => { void onWallpaper(e.target.files?.[0]); e.target.value = ''; }} />
+      </div>
+      <Md3Slider label="模糊半径" value={s.wallpaperBlur} min={0} max={40} unit="px"
+                 sublabel="背景高斯模糊，越高越柔" onChange={(n) => update({ wallpaperBlur: n })} />
+      <Md3Slider label="背景压暗" value={s.wallpaperDim} min={0} max={95} unit="%"
+                 sublabel="内容遮罩不透明度，越高越保证文字可读"
+                 onChange={(n) => update({ wallpaperDim: n })} />
+      <Md3Switch
+        label="上传后自动分析主题色"
+        description="用与系统同款的 QuantizerCelebi 取色管线生成完整浅/深 MD3 色板"
+        checked={s.autoAccent}
+        onChange={(v) => update({ autoAccent: v })}
+      />
+      <div className="flex items-center gap-3 py-3">
+        <span className="w-7 h-7 rounded-full border shrink-0"
+              style={{ backgroundColor: s.accentHex, borderColor: scheme.outline }} />
+        <span className="text-[11px] font-mono-tabular" style={{ color: scheme.onSurfaceVariant }}>
+          {s.accentHex}
+        </span>
+        <label className="relative ml-auto text-[11px] font-semibold cursor-pointer px-3 py-2 rounded-full overflow-hidden"
+               style={{ backgroundColor: scheme.secondaryContainer, color: scheme.onSecondaryContainer }}>
+          手动指定种子色
+          <input type="color" value={s.accentHex} aria-label="手动选择种子色"
+                 onChange={(e) => void onManualColor(e.target.value)}
+                 className="absolute opacity-0 w-0 h-0" />
+        </label>
+      </div>
+
+      {/* ---------------------------------------------------------------- 字体 */}
+      {section('字体', <Type className="w-4 h-4" />)}
+      <div className="text-[12px] leading-relaxed py-1" style={{ color: scheme.onSurfaceVariant }}>
+        中文默认 <b style={{ color: scheme.onSurface }}>思源宋体（Noto Serif SC）</b>，字体文件已打进包内，
+        无网络也能显示；标题拉丁字形用 Bricolage Grotesque。
+      </div>
+      <Md3Switch label="使用上传字体" description="支持 TTF / OTF / WOFF / WOFF2"
+                 checked={s.customFontOn} onChange={(v) => update({ customFontOn: v })} />
+      <div className="flex flex-wrap gap-2 py-2">
+        <Md3Button size="sm" variant="tonal" onClick={() => fontInput.current?.click()}>
+          <Type className="w-3.5 h-3.5" /> 上传字体
+        </Md3Button>
+        <Md3Button size="sm" variant="outlined"
+                   onClick={() => update({ customFontOn: false }, '已恢复内置思源宋体')}>
+          恢复思源宋体
+        </Md3Button>
+        <input ref={fontInput} type="file" accept=".ttf,.otf,.woff,.woff2,font/*"
+               className="hidden" aria-hidden="true"
+               onChange={(e) => { void onFont(e.target.files?.[0]); e.target.value = ''; }} />
+      </div>
+      <Md3Slider label="界面字号" value={Math.round(s.fontScale * 100)} min={90} max={130} unit="%"
+                 sublabel="整体 rem 缩放，设置与游戏内一致"
+                 onChange={(n) => update({ fontScale: n / 100 })} />
+
+      {/* ---------------------------------------------------------- 声音与触感 */}
+      {section('声音与触感', <Volume2 className="w-4 h-4" />)}
+      <Md3Slider label="交互音量" value={Math.round(s.volume * 100)} min={0} max={100} unit="%"
+                 sublabel="作用于所有音效的主增益节点；顶栏音量键仍控制总开关"
+                 onChange={(n) => update({ volume: n / 100 })} />
+      <div className="flex flex-wrap gap-2 py-2">
+        <Md3Button size="sm" variant="tonal" onClick={() => workshopAudio.playLatheBeat(true)}>
+          试听一下
+        </Md3Button>
+        <Md3Button size="sm" variant="outlined" onClick={() => triggerHaptic(true, 12)}>
+          震动反馈
+        </Md3Button>
+      </div>
+      <Md3Switch label="触感震动" description="节拍 / 精修 / 提醒的短震"
+                 checked={s.haptics} onChange={(v) => update({ haptics: v })} />
+
+      {/* ---------------------------------------------------------- 显示与交互 */}
+      {section('显示与交互', <SlidersHorizontal className="w-4 h-4" />)}
+      <Md3Switch label="减弱动效" description="压缩过渡与弹簧动画时长"
+                 checked={reducedMotion}
+                 onChange={(v) => { setReducedMotion(v); update({ reducedMotion: v }); }} />
+      <Md3Switch label="抑制强闪光" description="降低涟漪金粉与高亮闪动"
+                 checked={noFlashVisuals} onChange={(v) => setNoFlashVisuals(v)} />
+      <Md3Switch
+        label="细腻粒子飘散"
+        description="涟漪金粉用连续亚像素粒子 + 漂移呼吸；关闭则回到省电块状采样"
+        checked={s.rippleFine}
+        onChange={(v) => update({ rippleFine: v }, v ? '已启用细腻粒子' : '已切回省电采样')}
+      />
+      <div className="mt-2 flex items-center gap-2 text-[11px]"
+           style={{ color: scheme.onSurfaceVariant }}>
+        {darkMode ? <Moon className="w-3.5 h-3.5" /> : <Sun className="w-3.5 h-3.5" />}
+        当前：{darkMode ? '深色' : '浅色'} · 涟漪与所有开关/滑块均为 AOSP 移植组件
+      </div>
+
+      {/* ---------------------------------------------------------- 数据与关于 */}
+      {section('数据与关于', <RotateCcw className="w-4 h-4" />)}
+      <div className="text-[11px] leading-relaxed py-1" style={{ color: scheme.onSurfaceVariant }}>
+        v3 · Graphite &amp; Cedar · 本地校验存档。个性化配置与游戏进度分开保存，清空不会影响银元与产量。
+        内置 AOSP RippleShader / StretchEdgeEffect / Expressive 弹簧物理，并通过
+        capacitor-material-you 插件读取手机 Material You 动态色。
+      </div>
+    </Md3Dialog>
   );
 };

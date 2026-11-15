@@ -1,0 +1,42 @@
+apply plugin: 'com.android.library'
+
+android {
+    namespace "com.materialyou.capacitor"
+
+    compileSdkVersion project.hasProperty('compileSdkVersion') ? project.compileSdkVersion : 36
+
+    defaultConfig {
+        minSdkVersion project.hasProperty('minSdkVersion') ? project.minSdkVersion : 23
+        targetSdkVersion project.hasProperty('targetSdkVersion') ? project.targetSdkVersion : 36
+        versionCode 1
+        versionName "0.1.0"
+        consumerProguardFiles "proguard-rules.pro"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(':capacitor-android')
+
+    // Material Components provides the public DynamicColors API used to
+    // resolve the system's Material You (Monet) palette.
+    // Roles like colorSurfaceContainerHigh require material >= 1.8.0;
+    // 1.12.0 ships with Capacitor 6+ templates already, Gradle picks the
+    // higher of the two versions automatically.
+    implementation "com.google.android.material:material:1.12.0"
+}

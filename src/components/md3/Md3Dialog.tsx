@@ -9,6 +9,7 @@ import { ElevationTokens, ExpressiveMotionTokens } from '../../aosp/md3Tokens';
 import { useAospSpring } from '../../aosp/SpringAnimation';
 import { useMd3Theme } from '../../aosp/ThemeContext';
 import { Md3RippleSurface } from './Md3RippleSurface';
+import { Md3StretchContainer } from './Md3StretchContainer';
 
 export interface Md3DialogProps {
   open: boolean;
@@ -92,7 +93,13 @@ export const Md3Dialog: React.FC<Md3DialogProps> = ({
             <X className="w-5 h-5" />
           </Md3RippleSurface>
         </div>
-        <div className="overflow-y-auto pr-1 text-sm leading-relaxed">{children}</div>
+        {/* 所有对话框的内容滚动统一走 AOSP EdgeEffect 前级拉伸（不再只是木料仓专用） */}
+        <Md3StretchContainer
+          mode="scroll"
+          className="flex-1 min-h-0 pr-1 text-sm leading-relaxed"
+        >
+          {children}
+        </Md3StretchContainer>
         {actions && <div className="flex items-center justify-end gap-3 pt-2">{actions}</div>}
       </div>
     </div>

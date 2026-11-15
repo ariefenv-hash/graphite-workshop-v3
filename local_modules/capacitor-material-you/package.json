@@ -1,0 +1,46 @@
+{
+  "name": "capacitor-material-you",
+  "version": "0.1.0",
+  "description": "Read Android 12+ Material You (Monet) dynamic system colors into any web app running in a Capacitor WebView. Returns the full MD3 color-role set for light & dark, plus a wallpaper seed fallback (Android 8.1+) and system dark-mode state.",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "android",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc --incremental false",
+    "verify": "tsc --noEmit",
+    "pack": "npm pack"
+  },
+  "keywords": [
+    "capacitor",
+    "capacitor-plugin",
+    "material-you",
+    "material",
+    "monet",
+    "dynamic-color",
+    "dynamic",
+    "md3",
+    "android",
+    "theme"
+  ],
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  },
+  "peerDependencies": {
+    "@capacitor/core": ">=5.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/core": "^8.6.2",
+    "typescript": "^5.6.3"
+  },
+  "author": "Graphite Workshop",
+  "license": "MIT"
+}

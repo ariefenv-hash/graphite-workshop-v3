@@ -62,6 +62,10 @@ jobs:
           npm install --no-save --no-package-lock --no-audit --no-fund \
             @capacitor/cli@7.4.2 @capacitor/core@7.4.2 @capacitor/android@7.4.2
 
+      # 权威类型检查：Vite 只做转译不查类型，设置页全量 MD3 化后必须显式跑一次。
+      - name: 类型检查
+        run: npx tsc --noEmit
+
       - name: 构建 dist/
         run: npm run build
 

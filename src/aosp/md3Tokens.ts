@@ -10,7 +10,12 @@
  * - androidx.compose.material3.tokens.ElevationTokens
  */
 
-export type ThemeId = 'cedar' | 'graphite' | 'prussian';
+/**
+ * 'monet' 为手机主题（Material You 动态色）：色板在运行时由
+ * src/aosp/systemTheme/ 从原生桥接 / 壁纸种子 / 截图取色生成，
+ * MD3_SCHEMES.monet 只是探测未完成时的占位色板。
+ */
+export type ThemeId = 'cedar' | 'graphite' | 'prussian' | 'monet';
 
 export interface Md3ColorScheme {
   id: ThemeId;
@@ -73,7 +78,7 @@ export interface Md3ColorScheme {
   tradeGoldSparkleRgba: [number, number, number, number];
 }
 
-export const MD3_SCHEMES: Record<ThemeId, { light: Md3ColorScheme; dark: Md3ColorScheme }> = {
+const MD3_BASE_SCHEMES: Record<Exclude<ThemeId, 'monet'>, { light: Md3ColorScheme; dark: Md3ColorScheme }> = {
   cedar: {
     light: {
       id: 'cedar',
@@ -354,6 +359,28 @@ export const MD3_SCHEMES: Record<ThemeId, { light: Md3ColorScheme; dark: Md3Colo
       lacquerTintRgba: [0.35, 0.62, 0.95, 0.42],
       tradeWaveRgba: [0.65, 0.78, 1.0, 0.48],
       tradeGoldSparkleRgba: [1.0, 0.84, 0.34, 0.95],
+    },
+  },
+};
+
+/**
+ * 手机主题（Material You）占位色板：动态探测完成前短暂使用，
+ * 以 graphite 基线打底，避免首帧拿到残缺色板。
+ */
+export const MD3_SCHEMES: Record<ThemeId, { light: Md3ColorScheme; dark: Md3ColorScheme }> = {
+  ...MD3_BASE_SCHEMES,
+  monet: {
+    light: {
+      ...MD3_BASE_SCHEMES.graphite.light,
+      id: 'monet',
+      label: '手机主题 · Material You',
+      lacquerName: '等待系统取色 · Material You',
+    },
+    dark: {
+      ...MD3_BASE_SCHEMES.graphite.dark,
+      id: 'monet',
+      label: '手机主题 · Material You',
+      lacquerName: '等待系统取色 · Material You',
     },
   },
 };
