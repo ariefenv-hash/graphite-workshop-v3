@@ -64,7 +64,7 @@ debug 签名，下载后允许「未知来源」直接安装。Release 资产页
 
 三处同时加固：
 
-1. **字体全部本地化** —— `public/fonts/` 内 19 个 woff2 + `fonts.css`，零外部请求。中文默认 **思源宋体 Noto Serif SC**（源码全字符 ∪ GB2312 一级字，按批子集化并自造 `unicode-range`，浏览器按需只加载命中批次）；标题拉丁字形 Bricolage Grotesque、等宽 JetBrains Mono。
+1. **字体全部本地化** —— `public/fonts/` 内 9 个唯一 woff2 + `fonts.css`（不同字重共用同一子集文件），零外部请求。中文默认 **思源宋体 Noto Serif SC**（源码全字符 ∪ GB2312 一级字，按批子集化并自造 `unicode-range`，浏览器按需只加载命中批次）；标题拉丁字形 Bricolage Grotesque、等宽 JetBrains Mono。
 2. **产物语法降级** —— `vite.config.ts` 加 `build.target: 'es2020'`。默认产物含 `??=` 等 ES2021 语法（acorn 按 ecmaVersion 2020 解析失败），老 Android System WebView 会直接 SyntaxError 白屏。
 3. **白屏兜底** —— `index.html` 内联脚本捕获 `error` / `unhandledrejection`，并在 4 秒后检测 `#root` 是否为空；异常时把错误信息、UA、href 画到页面上，便于截图定位，不再是纯白。
 
