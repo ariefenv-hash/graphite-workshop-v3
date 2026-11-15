@@ -79,7 +79,16 @@ jobs:
         run: npx tsc --noEmit
 
       - name: 构建 dist/
-        run: npm run build
+        run: |
+          if ! npm run build > /tmp/gw-build.log 2>&1; then
+            echo '---- vite build 输出 ----'
+            cat /tmp/gw-build.log
+            while IFS= read -r line; do
+              echo "::error::${line}"
+            done < <(tail -n 45 /tmp/gw-build.log)
+            exit 1
+          fi
+          tail -n 12 /tmp/gw-build.log
 
       # 不把 android/ 入库：每次由固定版本的 CLI 现场生成，工程可复现。
       - name: 生成并同步 Android 工程
