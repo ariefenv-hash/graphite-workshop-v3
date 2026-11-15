@@ -217,7 +217,7 @@ export async function initPersonalization(s: GwSettings, surfaceHex: string): Pr
   try {
     const font = await getAsset('customFont');
     if (font) {
-      fontUrl = URL.createObjectURL(file);
+      fontUrl = URL.createObjectURL(font);
       const face = new FontFace('GwCustomFont', `url("${fontUrl}")`);
       await face.load();
       document.fonts.add(face);
@@ -238,7 +238,7 @@ export async function setCustomFont(file: File): Promise<boolean> {
   try {
     await putAsset('customFont', file);
     if (fontUrl) URL.revokeObjectURL(fontUrl);
-    fontUrl = URL.createObjectURL(font);
+    fontUrl = URL.createObjectURL(file);
     const face = new FontFace('GwCustomFont', `url("${fontUrl}")`);
     await face.load();
     if (fontFace) document.fonts.delete(fontFace);
