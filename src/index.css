@@ -1,0 +1,113 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-display: "Bricolage Grotesque", "Noto Sans SC", system-ui, -apple-system, sans-serif;
+  --font-sans: "Noto Sans SC", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    overscroll-behavior-y: contain;
+  }
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-mono-tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* AOSP MD3 Expressive scrollbar refinement */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 120, 112, 0.28);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 120, 112, 0.45);
+}
+
+/* Swing-QTE feedback staging. The travelling caliper itself is driven by RAF,
+   these only decorate discrete events (judgement, milestone, dust burst). */
+@keyframes qte-pop {
+  0% { transform: scale(0.82); opacity: 0; }
+  60% { transform: scale(1.09); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.qte-pop {
+  animation: qte-pop 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.qte-milestone {
+  text-shadow: 0 0 10px currentColor;
+}
+
+@keyframes heat-flash {
+  0% { box-shadow: inset 0 0 0 0 rgba(255, 176, 92, 0); }
+  35% { box-shadow: inset 0 0 26px 4px rgba(255, 176, 92, 0.55); }
+  100% { box-shadow: inset 0 0 0 0 rgba(255, 176, 92, 0); }
+}
+
+.heat-flash {
+  animation: heat-flash 0.72s ease-out both;
+}
+
+@keyframes event-in {
+  from { transform: translateY(-8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.event-card {
+  animation: event-in 0.34s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.qte-needle {
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.22);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  .qte-milestone {
+    text-shadow: none;
+  }
+}
