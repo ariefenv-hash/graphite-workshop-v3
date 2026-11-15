@@ -97,7 +97,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gw-build-log
-          path: gw-build.log
+          path: |
+            gw-build.log
+            gw-gradle.log
           if-no-files-found: ignore
           retention-days: 7
 
@@ -115,7 +117,15 @@ jobs:
 
       - name: Gradle assembleDebug
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: |
+          if ! ./gradlew assembleDebug --no-daemon > /tmp/gw-gradle.log 2>&1; then
+            echo '---- gradle 输出（尾部 80 行） ----'
+            tail -n 80 /tmp/gw-gradle.log
+            cp /tmp/gw-gradle.log ../gw-gradle.log
+            python3 -c "import pathlib,re; L=[re.sub(r'\x1b\[[0-9;]*m','',x) for x in pathlib.Path('/tmp/gw-gradle.log').read_text(errors='replace').splitlines()]; print('::error:: '+' | '.join(x.replace('%','%25') for x in L[-80:]))"
+            exit 1
+          fi
+          tail -n 20 /tmp/gw-gradle.log
 
       - name: 收集产物
         run: |
