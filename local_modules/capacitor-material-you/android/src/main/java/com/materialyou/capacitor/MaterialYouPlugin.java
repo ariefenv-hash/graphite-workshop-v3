@@ -79,10 +79,8 @@ public class MaterialYouPlugin extends Plugin {
         m.put("surfaceContainerHighest", com.google.android.material.R.attr.colorSurfaceContainerHighest);
         m.put("onSurface", com.google.android.material.R.attr.colorOnSurface);
         m.put("onSurfaceVariant", com.google.android.material.R.attr.colorOnSurfaceVariant);
-        // Inverse roles
-        m.put("inverseSurface", com.google.android.material.R.attr.colorInverseSurface);
-        m.put("inverseOnSurface", com.google.android.material.R.attr.colorInverseOnSurface);
-        m.put("inversePrimary", com.google.android.material.R.attr.colorInversePrimary);
+        // Inverse roles: Material Components 1.12.0 未暴露这三个 R.attr，
+        // 引用会直接编译失败；由 Web 侧调色板生成补位。
         // Outline & error roles
         m.put("outline", com.google.android.material.R.attr.colorOutline);
         m.put("outlineVariant", com.google.android.material.R.attr.colorOutlineVariant);
