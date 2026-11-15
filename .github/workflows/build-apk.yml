@@ -44,13 +44,18 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: 安装 SDK 35 组件并接受许可
+      # ubuntu-latest runner 自带 Android SDK，不引入第三方 setup action
+      - name: Android SDK 35（runner 预装）
         run: |
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools' > /dev/null
+          set -euxo pipefail
+          : "${ANDROID_HOME:?runner 未提供 ANDROID_HOME}"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER" || { echo 'sdkmanager 缺失'; ls -la "$ANDROID_HOME/cmdline-tools" || true; exit 1; }
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools' > /dev/null
+          echo 'ANDROID_HOME' >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
 
       # 仓库刻意不提交 package-lock.json，这里沿用 npm install 且不写 lock；
       # Capacitor 三件套钉死版本，避免与网页构建产物产生漂移。
