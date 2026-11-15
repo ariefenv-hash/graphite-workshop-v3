@@ -17,7 +17,7 @@ npm run lint     # tsc --noEmit
 
 ## 重新部署
 
-重新构建后，把 `dist/` 内容推送到 `gh-pages` 分支根目录即可（Pages 数据源 = gh-pages / root）。仓库未配置**网页**自动构建/部署工作流，避免 `vite 8 / TS 7` 在 CI 上的隐式漂移；另有一条完全独立的 Android APK 工作流，见下节，不触碰 `gh-pages` 与站点。
+重新构建后，把 `dist/` 内容推送到 `gh-pages` 分支根目录即可（Pages 数据源 = gh-pages / root）。仓库未配置**网页专用**构建/部署工作流，避免 `vite 8 / TS 7` 在 CI 上的隐式漂移；Android APK 工作流会在构建成功后把同一份 `dist/` 同步到 `gh-pages`，保证网页与 APK 永远同版。
 
 ## 随附文档
 
@@ -48,6 +48,7 @@ debug 签名，下载后允许「未知来源」直接安装。Release 资产页
 3. `npm run build` → `npx cap add android` → `npx cap sync android`
 4. `./gradlew assembleDebug` → 上传 APK + 去中间产物的 `android-project.tar.gz`
 5. 发布/覆盖 `apk-latest` Release
+6. 把同一份 `dist/`（含 `.nojekyll`）同步到 `gh-pages`，Pages 自动重新部署
 
 `android/` 工程**不入库**，由固定版本 CLI 现场生成，保证可复现；需要二次原生开发时下载 `android-project.tar.gz` 用 Android Studio 打开即可。
 
@@ -55,7 +56,7 @@ debug 签名，下载后允许「未知来源」直接安装。Release 资产页
 
 - 返回键沿用 Capacitor 默认行为，单页应用可能直接退出；如需栈内回退，可在工程里加 `@capacitor/app` 的 `backButton` 监听
 - 启动图标 / 启动屏为 Capacitor 默认资源，未生成专属图标
-- Google Fonts 外链在联网时正常，离线时回退 `system-ui`（与网页版一致）
+- 字体已全部本地化（思源宋体 + 显示/等宽字重），零外部请求；设置页可上传自定义字体
 - 应用 ID `com.ariefenv.graphite` 一经发布不可更改，自用阶段可先在 `capacitor.config.json` 调整
 
 ## v3.1 · APK 白屏修复与个性化设置
@@ -70,7 +71,7 @@ debug 签名，下载后允许「未知来源」直接安装。Release 资产页
 
 **设置页**（顶栏齿轮图标）：壁纸上传 / 模糊半径 / 背景压暗 / 从壁纸自动提取主色并应用到强调色 / 手动改色 / 上传自定义字体 / 界面字号 / 交互音量（主增益节点）/ 震动 / 深色模式 / 跟随系统深浅色 / 减弱动效 / 抑制强闪光 / 漆色主题 / 清空个性化数据。配置走 localStorage，壁纸与字体走 IndexedDB，与游戏存档隔离。
 
-> **系统动态主题色**：Android Monet / `wallpaperColors` 没有 Web 标准接口，WebView 内读不到，按约定跳过；仅保留可用的 `prefers-color-scheme` 跟随系统深浅色。
+> **系统动态主题色**：纯网页没有 Web 标准接口，按约定跳过；APK 内由随仓库的 `capacitor-material-you` 原生插件读取 Android 12+ Monet 角色（8.1+ 回退壁纸种子色），详见 `MaterialYou集成指南.md`。深浅色跟随系统由 ThemeContext 单一真源管理。
 
 > 图标沿用 lucide 的 JSX `<svg>`，React 自动绑定 `http://www.w3.org/2000/svg` 命名空间，避免老 WebView 动态创建 SVG 不显示。
 
@@ -115,3 +116,21 @@ debug 签名，下载后允许「未知来源」直接安装。Release 资产页
   对话框拉伸形成三层覆盖。
 - 插件包补 `"type": "module"`；APK 工作流新增插件注册校验，保留原有 `tsc --noEmit`。
 - 中文字体保持思源宋体（第十轮基底误回退到 Noto Sans SC，已纠正）。
+
+## 十二、CI 收口：插件落地与网页同版
+
+连续失败的根因逐层定位并修复（每步都由工作流把日志尾部回显，不再盲猜）：
+
+1. 工作流里多行 Python heredoc 顶格 → YAML 解析失败，run 连 job 都不生成；改成单行 `python -c`。
+2. `vite build` 报 `Rolldown failed to resolve import "capacitor-material-you"` → 插件包自己的
+   `dist/` 6 个编译产物被 `.gitignore` 的 `dist/` 误伤、从未入库；已补推并把规则收窄为 `/dist/`。
+3. 同一模块名在 Vite 侧加 alias 指向 `local_modules/.../dist/index.js`，不依赖 npm 安装形态。
+4. `local_modules/.../dist/index.js` 缺失导致 `UNLOADABLE_DEPENDENCY`，随 ② 一并解决。
+5. `Gradle assembleDebug` 报 3 个 `cannot find symbol`：Material Components 1.12.0 没有
+   `colorInverseSurface` / `colorInverseOnSurface` / `colorInversePrimary` 三个 `R.attr`；
+   从原生桥移除，Web 侧 `monetScheme.ts` 用种子色色板自动补齐这三项。
+6. 顺手修正 `public/fonts/fonts.css` 里多写一层 `./fonts/` 的 url 路径（CSS 与 woff2 同目录）。
+
+最终 run `43691968830` 19 步全绿：APK 8,460,834 B（sha256 `2487d6cf…`）、
+`gh-pages` 同步 18 文件（`deploy: sync v3 UI (1e1b86f)`）。本地无头 Chromium 载入已部署站点，
+`#root` 渲染出完整 DOM（80,364 字符，含「制造车间」），白屏兜底未触发。
