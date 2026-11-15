@@ -36,12 +36,13 @@ jobs:
         with:
           node-version: '22'
 
+      # 不放 setup-java 的 cache: gradle —— 它会扫描仓库里的 Gradle 构建文件，
+      # 但 android/ 是后面由 cap add 现场生成的，首步必然无匹配而报错。
       - name: JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
-          cache: gradle
 
       - name: Android SDK
         uses: android-actions/setup-android@v3
