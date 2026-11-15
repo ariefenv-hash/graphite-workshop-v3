@@ -83,5 +83,35 @@ debug 签名，下载后允许「未知来源」直接安装。Release 资产页
 **设置 → 显示与交互 → 细腻粒子飘散** 可切回省电档（旧块状采样）。`u_fineQuality` 在两份 shader 里做 `mix`，双档共用同一套程序，切换零重编译。
 
 
-### 手机主题（Material You）
-APK 内随包集成 `local_modules/capacitor-material-you`：Android 12+ 读取系统 Monet 完整色板，8.1–11 退到壁纸种子色，纯浏览器/老设备退到截图取色。顶栏循环到「手机主题」或设置页一键应用，详见 `MaterialYou集成指南.md`。
+## 第十轮：MD3 视觉统一 + StretchEdge 全应用 + Material You 接进设置
+
+- **设置页全面改用移植组件**：`Md3Dialog` / `Md3Switch` / `Md3Slider` / `Md3Button` /
+  `Md3SegmentedButton`，移除原生 `<input type="range">` 与自绘 46×26 开关。
+- **StretchEdge 不再只服务木料仓**：`Md3StretchContainer` 新增 `mode='scroll'`（对话框 /
+  设置页内容滚动）与 `mode='window'`（页面级前级滑动），三种模式共用 AOSP
+  `EdgeEffect` 欠阻尼弹簧，仅视觉强度不同；静止时不写 transform，避免影响绝对定位。
+- **Material You 进设置**：本版集成的 `capacitor-material-you` 插件在设置页可直接
+  「应用手机主题 / 壁纸截图取色 / 重新探测」，深浅色跟随系统由 ThemeContext 单一真源管理。
+  上传壁纸若开启自动取色，会走与系统同款的 QuantizerCelebi 管线生成完整浅/深色板。
+- **涟漪细腻档**：默认连续亚像素粒子场（逐格哈希 + fwidth 抗锯齿 + 漂移呼吸），
+  取代旧 `mod(uv, in_noiseScale)` + `step()` 的块状量化采样；设置页可切回省电档。
+- 白屏修复保留：字体全本地、构建目标 es2020、内联错误兜底页。
+
+## 十一、涟漪去颗粒感：删除块状量化档，改为密度可调
+
+在第十轮基础上继续。用户反馈「采样优化后颗粒感非常强，没有原先粒子飘散的细腻感」，
+根因是 Framework / SystemUI 两条 shader 仍保留 `mod(uv, in_noiseScale)` + `step()`
+的量化方块路径作为「省电档」，任何落到该档的情况都会变成硬边颗粒。
+
+- 删除 `coarseSparkles` / `coarseSystemUISparkles` 与 `u_fineQuality` 布尔档；
+  `sparkleField` 唯一路径改为**三尺度连续亚像素粒子场**（逐格哈希定位、fwidth 软边、
+  相位漂移 + 呼吸），密度参与 GLSL 门控。
+- Canvas2D 降级恒走粒子场，粒子半径缩小、数量随密度缩放、不再有「只有一个实心圆」。
+- `setRippleFineQuality` 保留为兼容别名，但 false 只把密度降到 0.55，**绝不回退方块**。
+- 设置页「细腻粒子飘散」开关改为「金粉飘散密度 35%–200%」滑块；旧存档
+  `rippleFine` 自动映射，深浅色仍由 ThemeContext 单一真源管理。
+- `Md3Slider` 补上 AOSP Framework 涟漪与越界 `EdgeEffect` 拉伸（手柄拖过 min/max
+  时同一套阻尼弹簧回弹），与第十轮的 `mode='window'` 页面级拉伸、`mode='scroll'`
+  对话框拉伸形成三层覆盖。
+- 插件包补 `"type": "module"`；APK 工作流新增插件注册校验，保留原有 `tsc --noEmit`。
+- 中文字体保持思源宋体（第十轮基底误回退到 Noto Sans SC，已纠正）。

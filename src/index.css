@@ -2,8 +2,6 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  /* 中文默认思源宋体（本地子集）；标题保留 Bricolage 拉丁字形 */
-
   --font-display: "Bricolage Grotesque", "Noto Serif SC", "Songti SC", "Source Han Serif SC", serif;
   --font-sans: "Noto Serif SC", "Songti SC", "Source Han Serif SC", system-ui, serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -113,7 +111,6 @@
     text-shadow: none;
   }
 }
-
 
 /* ---- 个性化壁纸层（由 settings.ts 注入 DOM 与 CSS 变量）---- */
 #gw-wallpaper {

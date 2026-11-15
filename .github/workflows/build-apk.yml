@@ -63,8 +63,12 @@ jobs:
           npm install --no-save --no-package-lock --no-audit --no-fund \
             @capacitor/cli@7.4.2 @capacitor/core@7.4.2 @capacitor/android@7.4.2
 
-      # 插件包必须随源码入库；npm install 会把 file: 依赖装进 node_modules，
-      # cap sync 依据其 package.json 的 capacitor 字段注册原生插件。
+      # 权威类型检查：Vite 只做转译不查类型，设置页全量 MD3 化后必须显式跑一次。
+      - name: 类型检查
+        run: npx tsc --noEmit
+
+      # 插件包随源码入库；npm install 装好 file: 依赖，cap sync 依据
+      # package.json 的 capacitor 字段把 Java 插件注册进 Android 工程。
       - name: 校验 Material You 原生插件
         run: |
           test -f node_modules/capacitor-material-you/package.json

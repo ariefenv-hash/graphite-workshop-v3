@@ -12,47 +12,42 @@ import { AospBaselineDialog } from './components/game/AospBaselineDialog';
 import { FactoryWorkspace } from './components/game/FactoryWorkspace';
 import { OfflineReportDialog } from './components/game/OfflineReportDialog';
 import { ResearchWorkspace } from './components/game/ResearchWorkspace';
-import { SettingsDialog } from './components/game/SettingsDialog';
 import { TopAppBar } from './components/game/TopAppBar';
 import { TradeWorkspace } from './components/game/TradeWorkspace';
 import { Md3RippleSurface } from './components/md3/Md3RippleSurface';
 import { Md3Snackbar } from './components/md3/Md3Snackbar';
-import { Md3StretchScroll } from './components/md3/Md3StretchScroll';
-import { initPersonalization, loadSettings } from './game/settings';
 import { useWorkshopStore } from './game/useWorkshopStore';
+import { SettingsDialog } from './components/game/SettingsDialog';
+import { loadSettings, initPersonalization } from './game/settings';
+import { Md3StretchContainer } from './components/md3/Md3StretchContainer';
 
 const THEME_CYCLE: ThemeId[] = ['cedar', 'graphite', 'prussian', 'monet'];
 
 type NavTab = 'factory' | 'trade' | 'research';
 
 const WorkshopShell: React.FC = () => {
-  const {
-    scheme, themeId, darkMode, setThemeId, setDarkMode,
-    darkFollowsSystem, monet, applyScreenshotSeed,
-  } = useMd3Theme();
+  const { scheme, themeId, darkMode, setThemeId, setDarkMode, monet, applyScreenshotSeed } = useMd3Theme();
   const store = useWorkshopStore();
   const { state } = store;
 
   const [activeTab, setActiveTab] = useState<NavTab>('factory');
   const [baselineOpen, setBaselineOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const screenshotInputRef = useRef<HTMLInputElement>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   /** 用户手动选过主题后，当前会话内不再自动覆盖为手机主题。 */
   const manualThemeRef = useRef(false);
-
-  // 个性化设置（字体 / 壁纸 / 音量 / 涟漪密度）启动时恢复一次。
-  useEffect(() => {
-    const s = loadSettings();
-    void initPersonalization(s, scheme.surface);
-    if (!s.followSystemDark && darkFollowsSystem) setDarkMode(darkMode);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     if (state.themeId && state.themeId !== themeId) {
       setThemeId(state.themeId);
     }
   }, [state.themeId, themeId, setThemeId]);
+
+  // 个性化设置（壁纸 / 字体 / 音量 / 涟漪档位）启动时恢复一次。
+  useEffect(() => {
+    const s0 = loadSettings();
+    void initPersonalization(s0, scheme.surface);
+  }, [scheme.surface]);
 
   // 手机主题自动覆盖：原生桥 / 壁纸种子就绪且用户未手动选过主题时，
   // 自动切到 monet。store 内回调均稳定，只需响应探测状态与当前主题。
@@ -74,7 +69,7 @@ const WorkshopShell: React.FC = () => {
     const next = THEME_CYCLE[(idx + 1) % THEME_CYCLE.length];
 
     // 浏览器环境走到「手机主题」且还没有任何种子色：打开壁纸截图选择器
-    // （Capacitor 环境下原生/壁纸路径已就绪，不会走到这里）。
+    // （内置 canvas 取色降级；Capacitor 环境下原生/壁纸路径已就绪，不会走到这里）。
     if (next === 'monet' && monet.source === 'none' && monet.seedHex === null) {
       screenshotInputRef.current?.click();
       return;
@@ -153,14 +148,13 @@ const WorkshopShell: React.FC = () => {
           {navItems.map((item) => {
             const active = activeTab === item.id;
             return (
-              <Md3RippleSurface
+              <button
                 key={item.id}
-                cornerRadius={16}
-                maskShape={RippleMaskShape.ROUNDED_RECT}
+                type="button"
                 onClick={() => setActiveTab(item.id)}
-                className="w-full py-2 cursor-pointer rounded-xl"
+                className="flex flex-col items-center gap-1.5 w-full py-2 cursor-pointer group focus-visible:outline-2 rounded-xl"
+                style={{ outlineColor: scheme.primary }}
               >
-                <div className="flex flex-col items-center gap-1.5 w-full">
                 <div
                   className="relative w-14 h-8 rounded-full flex items-center justify-center transition-colors duration-150"
                   style={{
@@ -171,7 +165,7 @@ const WorkshopShell: React.FC = () => {
                   {item.icon}
                   {item.badge !== undefined && (
                     <span
-                      className="absolute top-0 right-0 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-mono-tabular font-bold flex items-center justify-center"
+                      className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-mono-tabular font-bold flex items-center justify-center"
                       style={{ backgroundColor: scheme.error, color: scheme.onError }}
                     >
                       {item.badge}
@@ -184,55 +178,55 @@ const WorkshopShell: React.FC = () => {
                 >
                   {item.label}
                 </span>
-                </div>
-              </Md3RippleSurface>
+              </button>
             );
           })}
         </aside>
 
-        {/* Main Workspace Viewport：页面级前级滑动也走 AOSP 拉伸弹簧 */}
+        {/* Main Workspace Viewport */}
         <main className="flex-1 p-4 sm:p-6 pb-24 lg:pb-8 min-w-0">
-          <Md3StretchScroll className="min-w-0">
-            {activeTab === 'factory' && (
-              <FactoryWorkspace
-                state={state}
-                qtePhaseRef={store.qtePhaseRef}
-                lastJudgment={store.lastJudgment}
-                onTriggerQte={store.triggerRhythmQte}
-                onRepairBurr={store.repairBurrPencil}
-                onSellBurrs={store.sellBurrDiscount}
-                onClearJam={store.clearStageJam}
-                onUpgradeStage={store.upgradeStage}
-                onExtractTimber={store.extractEmergencyTimber}
-                onBuyMaterial={store.buyMaterialPack}
-                onUpdateParam={store.updateParam}
-                onSetShape={store.setBarrelShape}
-                onToggleAutoServo={(v) => store.updateAccessibility('autoTrimServo', v)}
-                onSellDirect={store.sellDirectBatch}
-                onGoToTrade={() => setActiveTab('trade')}
-                onResolveEvent={store.resolveEvent}
-              />
-            )}
+          {/* 页面级前级滑动：与木料仓同一套 AOSP EdgeEffect 弹簧，不改滚动结构 */}
+          <Md3StretchContainer mode="window" className="min-h-full">
+          {activeTab === 'factory' && (
+            <FactoryWorkspace
+              state={state}
+              qtePhaseRef={store.qtePhaseRef}
+              lastJudgment={store.lastJudgment}
+              onTriggerQte={store.triggerRhythmQte}
+              onRepairBurr={store.repairBurrPencil}
+              onSellBurrs={store.sellBurrDiscount}
+              onClearJam={store.clearStageJam}
+              onUpgradeStage={store.upgradeStage}
+              onExtractTimber={store.extractEmergencyTimber}
+              onBuyMaterial={store.buyMaterialPack}
+              onUpdateParam={store.updateParam}
+              onSetShape={store.setBarrelShape}
+              onToggleAutoServo={(v) => store.updateAccessibility('autoTrimServo', v)}
+              onSellDirect={store.sellDirectBatch}
+              onGoToTrade={() => setActiveTab('trade')}
+              onResolveEvent={store.resolveEvent}
+            />
+          )}
 
-            {activeTab === 'trade' && (
-              <TradeWorkspace
-                state={state}
-                recentArrival={store.recentShipArrival}
-                onClearArrival={store.clearRecentShipArrival}
-                onShipOrder={store.shipOrder}
-                onRefreshOrders={store.refreshOrders}
-              />
-            )}
+          {activeTab === 'trade' && (
+            <TradeWorkspace
+              state={state}
+              recentArrival={store.recentShipArrival}
+              onClearArrival={store.clearRecentShipArrival}
+              onShipOrder={store.shipOrder}
+              onRefreshOrders={store.refreshOrders}
+            />
+          )}
 
-            {activeTab === 'research' && (
-              <ResearchWorkspace
-                state={state}
-                onUnlockTech={store.unlockTech}
-                onUpdateAccessibility={store.updateAccessibility}
-                onResetSave={store.resetProgress}
-              />
-            )}
-          </Md3StretchScroll>
+          {activeTab === 'research' && (
+            <ResearchWorkspace
+              state={state}
+              onUnlockTech={store.unlockTech}
+              onUpdateAccessibility={store.updateAccessibility}
+              onResetSave={store.resetProgress}
+            />
+          )}
+          </Md3StretchContainer>
         </main>
       </div>
 
@@ -285,9 +279,12 @@ const WorkshopShell: React.FC = () => {
         })}
       </nav>
 
-      <OfflineReportDialog report={store.offlineReport} onDismiss={store.dismissOfflineReport} />
+      <OfflineReportDialog
+        report={store.offlineReport}
+        onDismiss={store.dismissOfflineReport}
+      />
 
-      {/* 手机主题降级入口：壁纸截图选择器（隐藏触发） */}
+      {/* 手机主题降级入口：壁纸截图选择器（canvas 取色，隐藏触发） */}
       <input
         ref={screenshotInputRef}
         type="file"
@@ -300,15 +297,11 @@ const WorkshopShell: React.FC = () => {
 
       <AospBaselineDialog open={baselineOpen} onClose={() => setBaselineOpen(false)} />
 
-      <SettingsDialog
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        onApplyTheme={(id: ThemeId) => {
-          manualThemeRef.current = true;
-          store.setThemeSelection(id);
-          setThemeId(id);
-        }}
-      />
+        <SettingsDialog
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          onApplyTheme={(id) => { store.setThemeSelection(id); setThemeId(id); }}
+        />
 
       <Md3Snackbar messages={store.snackbars} />
     </div>
