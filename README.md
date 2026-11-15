@@ -83,16 +83,5 @@ debug 签名，下载后允许「未知来源」直接安装。Release 资产页
 **设置 → 显示与交互 → 细腻粒子飘散** 可切回省电档（旧块状采样）。`u_fineQuality` 在两份 shader 里做 `mix`，双档共用同一套程序，切换零重编译。
 
 
-## 第十轮：MD3 视觉统一 + StretchEdge 全应用 + Material You 接进设置
-
-- **设置页全面改用移植组件**：`Md3Dialog` / `Md3Switch` / `Md3Slider` / `Md3Button` /
-  `Md3SegmentedButton`，移除原生 `<input type="range">` 与自绘 46×26 开关。
-- **StretchEdge 不再只服务木料仓**：`Md3StretchContainer` 新增 `mode='scroll'`（对话框 /
-  设置页内容滚动）与 `mode='window'`（页面级前级滑动），三种模式共用 AOSP
-  `EdgeEffect` 欠阻尼弹簧，仅视觉强度不同；静止时不写 transform，避免影响绝对定位。
-- **Material You 进设置**：本版集成的 `capacitor-material-you` 插件在设置页可直接
-  「应用手机主题 / 壁纸截图取色 / 重新探测」，深浅色跟随系统由 ThemeContext 单一真源管理。
-  上传壁纸若开启自动取色，会走与系统同款的 QuantizerCelebi 管线生成完整浅/深色板。
-- **涟漪细腻档**：默认连续亚像素粒子场（逐格哈希 + fwidth 抗锯齿 + 漂移呼吸），
-  取代旧 `mod(uv, in_noiseScale)` + `step()` 的块状量化采样；设置页可切回省电档。
-- 白屏修复保留：字体全本地、构建目标 es2020、内联错误兜底页。
+### 手机主题（Material You）
+APK 内随包集成 `local_modules/capacitor-material-you`：Android 12+ 读取系统 Monet 完整色板，8.1–11 退到壁纸种子色，纯浏览器/老设备退到截图取色。顶栏循环到「手机主题」或设置页一键应用，详见 `MaterialYou集成指南.md`。

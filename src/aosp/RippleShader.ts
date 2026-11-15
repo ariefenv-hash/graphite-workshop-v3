@@ -316,7 +316,6 @@ uniform vec4 u_lacquerColor;
 uniform float u_bloomRadius;
 uniform float u_trailDecay;
 uniform float u_sparkleDensity;
-uniform float u_fineQuality;
 
 const float PI = 3.1415926535897932384626;
 
@@ -356,20 +355,8 @@ float fineSparkles(vec2 uv, float t, float density, float scale) {
   float radius = (0.12 + 0.13 * fract(h * 13.71)) * clamp(density, 0.35, 2.0);
   float pt = 1.0 - smoothstep(radius - aa, radius + aa, d);
   float twinkle = 0.30 + 0.70 * smoothstep(0.12, 0.92, 0.5 + 0.5 * sin(t * 2.6 + h * 41.3));
-  float gate = smoothstep(0.28, 0.60, h2);
+  float gate = smoothstep(mix(0.62, 0.16, clamp(density, 0.35, 2.0) / 2.0), 0.60, h2);
   return pt * gate * twinkle;
-}
-
-float coarseSparkles(vec2 uv, float t) {
-  float n = triangleNoise(uv);
-  float s = 0.0;
-  for (float i = 0.0; i < 4.0; i += 1.0) {
-    float l = i * 0.1;
-    float h = l + 0.05 * clamp(u_sparkleDensity, 0.35, 2.0);
-    float o = sin(PI * (t + 0.35 * i));
-    s += threshold(n + o, l, h);
-  }
-  return saturate(s) * in_sparkleColor.a;
 }
 
 float softCircle(vec2 uv, vec2 xy, float radius, float blur) {
@@ -479,15 +466,13 @@ void main() {
   float alpha = min(fadeIn, 1.0 - fadeOutNoise);
   vec2 uv = p * in_resolutionScale;
   float turb = turbulence(uv, in_turbulencePhase);
-  // 旧路径：uv 按 in_noiseScale(≈2.1px) 量化 + step 硬阈值 → 方块颗粒（省电档保留）
-  vec2 densityUv = uv - mod(uv, in_noiseScale);
-  float coarse = coarseSparkles(densityUv, in_noisePhase) / max(in_sparkleColor.a, 0.001);
-  // 新路径：连续高频双尺度粒子场（≈2.5px / ≈1.0px 格），逐格漂移 + 软边抗锯齿
+  // 唯一路径：连续亚像素三尺度粒子场，逐格哈希定位 + 漂移 + 呼吸 + fwidth 软边。
+  // 不再把 uv 量化成 2px 方块（step 硬阈值）——那是颗粒感的来源。
   vec2 base = uv / max(in_noiseScale, vec2(0.00001));
   float fineA = fineSparkles(base, in_noisePhase * 6.2832, u_sparkleDensity, 0.85);
   float fineB = fineSparkles(base + vec2(11.7, 4.3), in_noisePhase * 10.68 + 2.1, u_sparkleDensity, 2.1);
-  float fine = saturate(fineA * 0.9 + fineB * 0.5);
-  float sparkleField = mix(coarse, fine, clamp(u_fineQuality, 0.0, 1.0));
+  float fineC = fineSparkles(base + vec2(3.9, 19.4), in_noisePhase * 7.31 + 4.6, u_sparkleDensity, 3.4);
+  float sparkleField = saturate(fineA * 0.9 + fineB * 0.52 + fineC * 0.26);
   float sparkleAlpha = sparkleField * ring * alpha * turb * in_sparkleColor.a;
   float fade = min(fadeIn, 1.0 - fadeOutRipple);
   float waveAlpha = softCircle(smudgeP, center, effectiveRadius * scaleIn, 1.0) * fade * in_color.a;
@@ -515,7 +500,7 @@ uniform float in_distortFactor;
 uniform int in_shape;
 uniform vec4 in_color;
 uniform vec4 in_sparkleColor;
-uniform float u_fineQuality;
+uniform float u_sparkleDensity;
 
 const float PI = 3.1415926535897932384626;
 
@@ -551,24 +536,10 @@ float fineSparkles(vec2 uv, float t, float density, float scale) {
   float radius = (0.12 + 0.13 * fract(h * 13.71)) * clamp(density, 0.35, 2.0);
   float pt = 1.0 - smoothstep(radius - aa, radius + aa, d);
   float twinkle = 0.30 + 0.70 * smoothstep(0.12, 0.92, 0.5 + 0.5 * sin(t * 2.6 + h * 41.3));
-  float gate = smoothstep(0.28, 0.60, h2);
+  float gate = smoothstep(mix(0.62, 0.16, clamp(density, 0.35, 2.0) / 2.0), 0.60, h2);
   return pt * gate * twinkle;
 }
 
-
-float coarseSystemUISparkles(vec2 uv, float timeSec) {
-  float n = triangleNoise(uv);
-  float s = 0.0;
-  float t = timeSec * 0.45;
-  for (float i = 0.0; i < 4.0; i += 1.0) {
-    float l = i * 0.01;
-    float h = l + 0.1;
-    float o = 1.0 + 0.2 * i;
-    float wave = abs(sin(PI * o * (t + 0.55 * i)));
-    s += smoothstep(l, h, n + wave) * (1.0 - smoothstep(h, h + 0.08, n + wave));
-  }
-  return saturate(s);
-}
 
 float shapeDistance(vec2 p, vec2 halfSize, int shapeType) {
   if (shapeType == 1) {
@@ -596,13 +567,11 @@ void main() {
   float bandWidth = max(min(in_size.x, in_size.y) * 0.16, 14.0);
   float ringMask = 1.0 - smoothstep(0.0, bandWidth, abs(dist));
   float centerFill = (1.0 - smoothstep(-6.0, 8.0, dist)) * (1.0 - smoothstep(0.0, 0.35, in_progress)) * 0.38;
-  vec2 pixelUv = floor(v_fragCoord / max(in_pixelDensity, 1.0)) * 0.08;
-  float coarse = coarseSystemUISparkles(pixelUv, timeSec);
   vec2 sparkUv = v_fragCoord / 2.6;
-  float fine = fineSparkles(sparkUv, timeSec * 2.2, 1.0, 1.0) * 0.85
-             + fineSparkles(sparkUv + vec2(7.1, 3.9), timeSec * 3.1 + 1.4, 1.0, 2.4) * 0.45;
-  float spark = saturate(mix(coarse, saturate(fine), clamp(u_fineQuality, 0.0, 1.0)))
-              * ringMask * sparkleFadeIn * sparkleFadeOut * in_sparkleStrength;
+  float fine = fineSparkles(sparkUv, timeSec * 2.2, u_sparkleDensity, 1.0) * 0.85
+             + fineSparkles(sparkUv + vec2(7.1, 3.9), timeSec * 3.1 + 1.4, u_sparkleDensity, 2.4) * 0.45
+             + fineSparkles(sparkUv + vec2(19.3, 8.7), timeSec * 4.7 + 0.8, u_sparkleDensity, 3.6) * 0.26;
+  float spark = saturate(fine) * ringMask * sparkleFadeIn * sparkleFadeOut * in_sparkleStrength;
   float waveAlpha = (ringMask * 0.55 + centerFill) * baseFadeIn * baseFadeOut * in_color.a;
   vec4 waveCol = vec4(in_color.rgb * waveAlpha, waveAlpha);
   vec4 sparkCol = vec4(in_sparkleColor.rgb * spark * in_sparkleColor.a, spark * in_sparkleColor.a);
@@ -612,13 +581,17 @@ void main() {
 type UniformCache = Record<string, WebGLUniformLocation | null>;
 
 
-/** 细腻档开关（默认开）。省电档回到旧的块状量化采样。 */
-let rippleFineQuality = true;
-export function setRippleFineQuality(fine: boolean): void {
-  rippleFineQuality = !!fine;
+/** 金粉飘散密度 0.35..2.0。细腻粒子场是唯一路径，不再有块状量化档。 */
+let rippleSparkleDensity = 1.05;
+export function setRippleSparkleDensity(density: number): void {
+  rippleSparkleDensity = Math.max(0.35, Math.min(2.0, Number(density) || 1.05));
 }
-export function getRippleFineQuality(): boolean {
-  return rippleFineQuality;
+export function getRippleSparkleDensity(): number {
+  return rippleSparkleDensity;
+}
+/** 兼容旧调用：false 也只降低密度，绝不回退到块状采样。 */
+export function setRippleFineQuality(fine: boolean): void {
+  setRippleSparkleDensity(fine ? 1.05 : 0.55);
 }
 
 interface FallbackParticle {
@@ -634,13 +607,13 @@ function fallbackHash(n: number): number {
 }
 function getFallbackParticles(key: object, count: number, seed: number): FallbackParticle[] {
   const cached = fallbackParticleCache.get(key);
-  if (cached) return cached;
+  if (cached && cached.length === count) return cached;
   const list: FallbackParticle[] = [];
   for (let i = 0; i < count; i++) {
     const a = fallbackHash(seed + i * 1.37);
     const b = fallbackHash(seed + i * 2.71 + 9.1);
     const c = fallbackHash(seed + i * 3.93 + 21.3);
-    list.push({ angle: a * Math.PI * 2, radial: 0.42 + 0.58 * b, radius: 0.32 + 0.62 * c, phase: a });
+    list.push({ angle: a * Math.PI * 2, radial: 0.42 + 0.58 * b, radius: 0.16 + 0.40 * c, phase: a });
   }
   fallbackParticleCache.set(key, list);
   return list;
@@ -730,7 +703,6 @@ class AospRippleRenderer {
         'u_bloomRadius',
         'u_trailDecay',
         'u_sparkleDensity',
-        'u_fineQuality',
       ]) {
         this.frameworkUniforms[name] = gl.getUniformLocation(fwProgram, name);
       }
@@ -747,7 +719,7 @@ class AospRippleRenderer {
         'in_shape',
         'in_color',
         'in_sparkleColor',
-        'u_fineQuality',
+        'u_sparkleDensity',
       ]) {
         this.systemUIUniforms[name] = gl.getUniformLocation(sysProgram, name);
       }
@@ -862,8 +834,7 @@ class AospRippleRenderer {
       gl.uniform4f(u.u_lacquerColor, ...val.lacquerColor);
       gl.uniform1f(u.u_bloomRadius, val.bloomRadius);
       gl.uniform1f(u.u_trailDecay, val.trailDecay);
-      gl.uniform1f(u.u_sparkleDensity, suppressSparkle ? 0.35 : val.sparkleDensity);
-      gl.uniform1f(u.u_fineQuality, rippleFineQuality ? 1 : 0);
+      gl.uniform1f(u.u_sparkleDensity, (suppressSparkle ? 0.35 : val.sparkleDensity) * rippleSparkleDensity);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
 
@@ -915,7 +886,7 @@ class AospRippleRenderer {
       gl.uniform1i(u.in_shape, s.shape);
       gl.uniform4f(u.in_color, ...s.color);
       gl.uniform4f(u.in_sparkleColor, ...s.sparkleColor);
-      gl.uniform1f(u.u_fineQuality, rippleFineQuality ? 1 : 0);
+      gl.uniform1f(u.u_sparkleDensity, rippleSparkleDensity);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
 
@@ -942,9 +913,9 @@ class AospRippleRenderer {
       ctx.fill();
 
       // 细腻飘散粒子（WebView 无 WebGL2 时也能看到，不再只是一个实心圆）
-      if (rippleFineQuality) {
+      {
         const sp = s.sparkleColor;
-        const parts = getFallbackParticles(s, 150, s.touchX * 0.73 + s.touchY * 1.31 + 3.7);
+        const parts = getFallbackParticles(s, Math.round(150 * rippleSparkleDensity), s.touchX * 0.73 + s.touchY * 1.31 + 3.7);
         const t = nowMs * 0.001;
         ctx.fillStyle = `rgba(${Math.round(sp[0] * 255)}, ${Math.round(sp[1] * 255)}, ${Math.round(sp[2] * 255)}, 1)`;
         for (const pt of parts) {
@@ -955,7 +926,7 @@ class AospRippleRenderer {
           const tw = 0.22 + 0.78 * (0.5 + 0.5 * Math.sin(t * 2.5 + pt.phase * 43.7));
           ctx.globalAlpha = Math.min(1, alpha * tw * sp[3] * 0.9);
           ctx.beginPath();
-          ctx.arc(px, py, pt.radius, 0, Math.PI * 2);
+          ctx.arc(px, py, Math.max(0.22, pt.radius * 0.72), 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -982,9 +953,9 @@ class AospRippleRenderer {
       ctx.ellipse(s.centerX, s.centerY, rx, ry, 0, 0, Math.PI * 2);
       ctx.stroke();
 
-      if (rippleFineQuality) {
+      {
         const sp = s.sparkleColor;
-        const parts = getFallbackParticles(s, 130, s.centerX * 0.61 + s.centerY * 1.07 + 8.2);
+        const parts = getFallbackParticles(s, Math.round(130 * rippleSparkleDensity), s.centerX * 0.61 + s.centerY * 1.07 + 8.2);
         const t = nowMs * 0.001;
         const fade = (1 - progress) * s.sparkleStrength * sp[3];
         ctx.fillStyle = `rgba(${Math.round(sp[0] * 255)}, ${Math.round(sp[1] * 255)}, ${Math.round(sp[2] * 255)}, 1)`;
@@ -996,7 +967,7 @@ class AospRippleRenderer {
           const tw = 0.22 + 0.78 * (0.5 + 0.5 * Math.sin(t * 2.3 + pt.phase * 37.1));
           ctx.globalAlpha = Math.min(1, fade * tw * 0.9);
           ctx.beginPath();
-          ctx.arc(px, py, pt.radius, 0, Math.PI * 2);
+          ctx.arc(px, py, Math.max(0.22, pt.radius * 0.72), 0, Math.PI * 2);
           ctx.fill();
         }
       }

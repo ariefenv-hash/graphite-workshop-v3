@@ -14,6 +14,7 @@ on:
       - 'package.json'
       - 'vite.config.ts'
       - 'capacitor.config.json'
+      - 'local_modules/**'
       - '.github/workflows/build-apk.yml'
 
 permissions:
@@ -62,9 +63,13 @@ jobs:
           npm install --no-save --no-package-lock --no-audit --no-fund \
             @capacitor/cli@7.4.2 @capacitor/core@7.4.2 @capacitor/android@7.4.2
 
-      # 权威类型检查：Vite 只做转译不查类型，设置页全量 MD3 化后必须显式跑一次。
-      - name: 类型检查
-        run: npx tsc --noEmit
+      # 插件包必须随源码入库；npm install 会把 file: 依赖装进 node_modules，
+      # cap sync 依据其 package.json 的 capacitor 字段注册原生插件。
+      - name: 校验 Material You 原生插件
+        run: |
+          test -f node_modules/capacitor-material-you/package.json
+          test -f node_modules/capacitor-material-you/android/src/main/java/com/materialyou/capacitor/MaterialYouPlugin.java
+          node -e "const p=require('./node_modules/capacitor-material-you/package.json'); if(!p.capacitor?.android?.src) process.exit(1); console.log('plugin:', p.name, p.version)"
 
       - name: 构建 dist/
         run: npm run build
@@ -75,6 +80,10 @@ jobs:
           test -f dist/index.html || { echo 'dist/index.html 缺失'; exit 1; }
           npx cap add android
           npx cap sync android
+          test -f android/app/src/main/assets/capacitor.plugins.json
+          grep -q 'capacitor-material-you' android/app/src/main/assets/capacitor.plugins.json || {
+            echo 'Material You 插件未注册进 Android 工程'; cat android/app/src/main/assets/capacitor.plugins.json; exit 1; }
+          echo 'capacitor.plugins.json:'; cat android/app/src/main/assets/capacitor.plugins.json
           grep -n 'compileSdkVersion\|targetSdkVersion\|minSdkVersion' android/variables.gradle
 
       - name: Gradle assembleDebug

@@ -2,26 +2,23 @@
  * 个性化设置数据层。
  * 配置走 localStorage（小 JSON），壁纸 / 自定义字体走 IndexedDB（Blob），
  * 与游戏存档 graphite_cedar_save_v1 完全隔离，不影响存档校验和。
- *
- * 深浅色由 ThemeContext 单一真源管理（darkFollowsSystem / resetDarkModeOverride /
- * setDarkMode），本文件不再另存一份开关，避免两套状态打架。
- * 系统动态色（Material You）由 src/aosp/systemTheme 的插件桥接提供。
  */
 import { workshopAudio } from './audio';
-import { setRippleFineQuality } from '../aosp/RippleShader';
+import { setRippleSparkleDensity } from '../aosp/RippleShader';
 
 export interface GwSettings {
   volume: number;            // 0..1 交互音量
   haptics: boolean;          // 触感震动
   reducedMotion: boolean;    // 减弱动效
+  followSystemDark: boolean; // 跟随系统深浅色
   wallpaperOn: boolean;
   wallpaperBlur: number;     // 0..40 px
   wallpaperDim: number;      // 0..95 % 内容遮罩不透明度
-  autoAccent: boolean;       // 上传壁纸后自动提取主题色并生成完整 MD3 色板
-  accentHex: string;         // 最近一次提取/手动指定的种子色（展示与壁纸 tint 用）
+  autoAccent: boolean;       // 上传壁纸后自动提取主题色
+  accentHex: string;
   customFontOn: boolean;
-  fontScale: number;         // 0.9..1.3
-  rippleFine: boolean;       // 涟漪细腻飘散粒子（false = 旧的省电块状采样）
+  fontScale: number;
+  sparkleDensity: number;     // 涟漪金粉飘散密度 0.35..2.0（细腻粒子场唯一路径）
 }
 
 const KEY = 'graphite_cedar_settings_v1';
@@ -32,6 +29,7 @@ export const DEFAULT_SETTINGS: GwSettings = {
   volume: 0.7,
   haptics: true,
   reducedMotion: false,
+  followSystemDark: false,
   wallpaperOn: false,
   wallpaperBlur: 14,
   wallpaperDim: 74,
@@ -39,17 +37,20 @@ export const DEFAULT_SETTINGS: GwSettings = {
   accentHex: '#8F4E00',
   customFontOn: false,
   fontScale: 1,
-  rippleFine: true,
+  sparkleDensity: 1.05,
 };
 
 export function loadSettings(): GwSettings {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return { ...DEFAULT_SETTINGS };
-    const parsed = JSON.parse(raw) as Partial<GwSettings> & { followSystemDark?: boolean };
-    // 旧版 followSystemDark 字段直接丢弃：深浅色已改由 ThemeContext 单一真源管理。
-    delete parsed.followSystemDark;
-    return { ...DEFAULT_SETTINGS, ...parsed };
+    const parsed = JSON.parse(raw) as Partial<GwSettings> & { rippleFine?: boolean };
+    const merged: GwSettings = { ...DEFAULT_SETTINGS, ...parsed };
+    // 兼容上一版存档：旧布尔档映射为密度，且永不回退到块状采样。
+    if (parsed.sparkleDensity === undefined && typeof parsed.rippleFine === 'boolean') {
+      merged.sparkleDensity = parsed.rippleFine ? 1.05 : 0.55;
+    }
+    return merged;
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
@@ -138,6 +139,7 @@ export async function extractAccent(blob: Blob): Promise<string> {
     }
     if (!n) return DEFAULT_SETTINGS.accentHex;
     r /= n; g /= n; b /= n;
+    // 提一点饱和、把明度收进可读区间
     const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
     const l = (mx + mn) / 2 / 255;
     const delta = mx - mn;
@@ -146,6 +148,7 @@ export async function extractAccent(blob: Blob): Promise<string> {
     const targetL = Math.min(0.62, Math.max(0.34, l));
     const toHex = (hslToRgb: [number, number, number]) =>
       '#' + hslToRgb.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+    // 直接用 HSL→RGB 的近似混合，避免引入额外依赖
     const c2 = (1 - Math.abs(2 * targetL - 1)) * sat;
     const hp = ((Math.atan2(Math.sqrt(3) * (g - b), 2 * r - g - b) / (2 * Math.PI)) + 1) % 1 * 6;
     const x = c2 * (1 - Math.abs((hp % 2) - 1));
@@ -180,9 +183,8 @@ function ensureWallpaperDom(): void {
 export function applySettings(s: GwSettings, surfaceHex: string): void {
   const root = document.documentElement;
   workshopAudio.setMasterVolume(s.volume);
-  setRippleFineQuality(s.rippleFine);
+  setRippleSparkleDensity(s.sparkleDensity);
   root.style.setProperty('--gw-font-scale', String(s.fontScale));
-  root.style.setProperty('--gw-accent', s.accentHex || DEFAULT_SETTINGS.accentHex);
   root.classList.toggle('gw-scaled', s.fontScale !== 1);
   root.classList.toggle('gw-reduced-motion', s.reducedMotion);
   root.classList.toggle('gw-wallpaper', s.wallpaperOn && !!wallpaperUrl);
@@ -231,7 +233,7 @@ export async function setCustomFont(file: File): Promise<boolean> {
   try {
     await putAsset('customFont', file);
     if (fontUrl) URL.revokeObjectURL(fontUrl);
-    fontUrl = URL.createObjectURL(font);
+    fontUrl = URL.createObjectURL(file);
     const face = new FontFace('GwCustomFont', `url("${fontUrl}")`);
     await face.load();
     if (fontFace) document.fonts.delete(fontFace);

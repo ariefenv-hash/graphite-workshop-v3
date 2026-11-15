@@ -1,6 +1,10 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * 两套真源合并：
+ *  - 手机主题（Material You）：原生插件桥接的运行时色板 + 三级降级
+ *  - 自定义强调色：从上传壁纸取色 / 手动选色，叠加在任意漆色方案之上
  */
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
@@ -9,10 +13,7 @@ import { getRippleRenderer, RippleDebugSample } from './RippleShader';
 import { monetStore, MonetState } from './systemTheme/monetStore';
 import { useMonetTheme } from './systemTheme/useMonetTheme';
 
-/**
- * 深色模式手动覆盖的持久化 key。null = 跟随系统（原生 uiMode 或浏览器
- * prefers-color-scheme）；true/false = 用户在应用内手动覆盖过。
- */
+/** 深色模式手动覆盖：null = 跟随系统（原生 uiMode / prefers-color-scheme）。 */
 const DARK_OVERRIDE_KEY = 'graphite_dark_override_v1';
 
 function readDarkOverride(): boolean | null {
@@ -26,14 +27,25 @@ function readDarkOverride(): boolean | null {
 
 function writeDarkOverride(value: boolean | null): void {
   try {
-    if (value === null) {
-      window.localStorage.removeItem(DARK_OVERRIDE_KEY);
-    } else {
-      window.localStorage.setItem(DARK_OVERRIDE_KEY, String(value));
-    }
+    if (value === null) window.localStorage.removeItem(DARK_OVERRIDE_KEY);
+    else window.localStorage.setItem(DARK_OVERRIDE_KEY, String(value));
   } catch {
     // ignore storage quota errors
   }
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  let h = hex.trim().replace(/^#/, '');
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) return null;
+  return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
+}
+
+function mixHex(a: string, b: string, weightB: number): string {
+  const x = hexToRgb(a) ?? { r: 0, g: 0, b: 0 };
+  const y = hexToRgb(b) ?? { r: 255, g: 255, b: 255 };
+  const f = (u: number, v: number) => Math.round(u * (1 - weightB) + v * weightB).toString(16).padStart(2, '0');
+  return '#' + f(x.r, y.r) + f(x.g, y.g) + f(x.b, y.b);
 }
 
 interface Md3ThemeContextValue {
@@ -47,6 +59,9 @@ interface Md3ThemeContextValue {
   reducedMotion: boolean;
   noFlashVisuals: boolean;
   webglSupported: boolean;
+  /** 壁纸取色得到的强调色；null = 用当前漆色方案原色。 */
+  customAccent: string | null;
+  setCustomAccent: (hex: string | null) => void;
   setThemeId: (id: ThemeId) => void;
   setDarkMode: (dark: boolean) => void;
   /** 清除深浅色手动覆盖，恢复跟随系统。 */
@@ -69,6 +84,7 @@ export const Md3ThemeProvider: React.FC<{
   const [themeId, setThemeId] = useState<ThemeId>(initialThemeId);
   const [darkOverride, setDarkOverride] = useState<boolean | null>(readDarkOverride);
   const [noFlashVisuals, setNoFlashVisuals] = useState(false);
+  const [customAccent, setCustomAccent] = useState<string | null>(null);
   const [reducedMotion, setReducedMotion] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
   );
@@ -81,21 +97,35 @@ export const Md3ThemeProvider: React.FC<{
   const darkMode = darkOverride ?? monet.isDark;
 
   const scheme = useMemo<Md3ColorScheme>(() => {
+    let base: Md3ColorScheme;
     if (themeId === 'monet') {
       const dynamic = darkMode ? monet.darkScheme : monet.lightScheme;
       // 动态色板尚未就绪时使用占位色板（graphite 基线），保证首帧完整。
-      return dynamic ?? (darkMode ? MD3_SCHEMES.monet.dark : MD3_SCHEMES.monet.light);
+      base = dynamic ?? (darkMode ? MD3_SCHEMES.monet.dark : MD3_SCHEMES.monet.light);
+    } else {
+      base = darkMode ? MD3_SCHEMES[themeId].dark : MD3_SCHEMES[themeId].light;
     }
-    return darkMode ? MD3_SCHEMES[themeId].dark : MD3_SCHEMES[themeId].light;
-  }, [themeId, darkMode, monet.darkScheme, monet.lightScheme]);
+    if (!customAccent) return base;
+
+    const rgb = hexToRgb(customAccent) ?? { r: 143, g: 78, b: 0 };
+    const lum = 0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b;
+    const on = lum > 150 ? '#1B1410' : '#FFFDF9';
+    const soft = mixHex(customAccent, darkMode ? '#151210' : '#FFFFFF', darkMode ? 0.78 : 0.86);
+    const onSoft = lum > 150 ? '#1B1410' : mixHex(customAccent, '#FFFFFF', 0.12);
+    return {
+      ...base,
+      primary: customAccent, onPrimary: on,
+      primaryContainer: soft, onPrimaryContainer: onSoft,
+      tertiary: customAccent, onTertiary: on,
+      tertiaryContainer: soft, onTertiaryContainer: onSoft,
+    } as Md3ColorScheme;
+  }, [themeId, darkMode, monet.darkScheme, monet.lightScheme, customAccent]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
     document.documentElement.classList.toggle('dark', darkMode);
     const metaTheme = document.querySelector('meta[name="theme-color"]');
-    if (metaTheme) {
-      metaTheme.setAttribute('content', scheme.surface);
-    }
+    if (metaTheme) metaTheme.setAttribute('content', scheme.surface);
   }, [darkMode, scheme.surface]);
 
   const setDarkMode = useCallback((dark: boolean) => {
@@ -122,6 +152,8 @@ export const Md3ThemeProvider: React.FC<{
       reducedMotion,
       noFlashVisuals,
       webglSupported: renderer.webglAvailable,
+      customAccent,
+      setCustomAccent,
       setThemeId,
       setDarkMode,
       resetDarkModeOverride,
@@ -132,18 +164,9 @@ export const Md3ThemeProvider: React.FC<{
       reportDebugSample: setLastUniformsDebug,
     }),
     [
-      scheme,
-      themeId,
-      darkMode,
-      darkOverride,
-      monet,
-      reducedMotion,
-      noFlashVisuals,
-      renderer.webglAvailable,
-      lastUniformsDebug,
-      setDarkMode,
-      resetDarkModeOverride,
-      applyScreenshotSeed,
+      scheme, themeId, darkMode, darkOverride, monet, reducedMotion, noFlashVisuals,
+      renderer.webglAvailable, customAccent, lastUniformsDebug,
+      setDarkMode, resetDarkModeOverride, applyScreenshotSeed,
     ]
   );
 
@@ -152,8 +175,6 @@ export const Md3ThemeProvider: React.FC<{
 
 export function useMd3Theme(): Md3ThemeContextValue {
   const ctx = useContext(Md3ThemeContext);
-  if (!ctx) {
-    throw new Error('useMd3Theme must be used within Md3ThemeProvider');
-  }
+  if (!ctx) throw new Error('useMd3Theme must be used within Md3ThemeProvider');
   return ctx;
 }
