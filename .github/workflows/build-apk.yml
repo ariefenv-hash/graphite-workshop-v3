@@ -86,7 +86,7 @@ jobs:
             echo '---- vite build 输出（尾部 40 行） ----'
             tail -n 40 /tmp/gw-build.log
             cp /tmp/gw-build.log ./gw-build.log
-            python3 -c "import pathlib; L=pathlib.Path('/tmp/gw-build.log').read_text(errors='replace').splitlines()[-6:]; print('::error:: '+' | '.join(x.replace('%','%25') for x in L))"
+            python3 -c "import pathlib,re; L=[re.sub(r'\x1b\[[0-9;]*m','',x) for x in pathlib.Path('/tmp/gw-build.log').read_text(errors='replace').splitlines()]; print('::error:: '+' | '.join(x.replace('%','%25') for x in L[-40:]))"
             exit 1
           fi
           tail -n 12 /tmp/gw-build.log
