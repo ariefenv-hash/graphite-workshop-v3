@@ -15,9 +15,18 @@
     text-rendering: optimizeLegibility;
   }
 
+  html {
+    /* 兜底：clip 不创建滚动容器，sticky 顶栏不会被破坏；
+       老 WebView 不支持 clip 时直接忽略，布局本身已保证不溢出。 */
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
   body {
     margin: 0;
     min-height: 100dvh;
+    max-width: 100%;
+    overflow-x: clip;
     overscroll-behavior-y: contain;
   }
 }
@@ -112,10 +121,18 @@
   }
 }
 
-/* ---- 个性化壁纸层（由 settings.ts 注入 DOM 与 CSS 变量）---- */
+/* ---- 个性化壁纸层（由 settings.ts 注入 DOM 与 CSS 变量）----
+   外层严格锁在视口内并裁切，模糊放大交给伪元素：
+   避免 fixed 层自身宽度超出屏幕而在 WebView 里撑出横向滚动。 */
 #gw-wallpaper {
-  position: fixed; inset: -6%; z-index: -2; pointer-events: none;
-  background-position: center; background-size: cover; background-repeat: no-repeat;
+  position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  overflow: hidden; background-repeat: no-repeat; background-position: center;
+  background-size: cover;
+}
+#gw-wallpaper::before {
+  content: ''; position: absolute; inset: -6%;
+  background-image: inherit; background-position: center;
+  background-size: cover; background-repeat: no-repeat;
   filter: blur(var(--gw-blur, 14px)) saturate(1.05);
   transform: scale(1.12); transition: filter .25s ease;
 }

@@ -33,24 +33,24 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
 
   return (
     <header
-      className="sticky top-0 z-30 h-14 lg:h-16 px-4 lg:px-6 flex items-center justify-between gap-4 backdrop-blur-md transition-colors duration-200"
+      className="sticky top-0 z-30 min-h-14 lg:h-16 px-2 sm:px-4 lg:px-6 py-1.5 sm:py-0 flex flex-wrap sm:flex-nowrap items-center justify-between gap-x-2 gap-y-1 sm:gap-4 backdrop-blur-md transition-colors duration-200"
       style={{
         backgroundColor: `${scheme.surface}E6`,
         borderBottom: `1px solid ${scheme.outlineVariant}`,
       }}
     >
-      {/* Zone 1: Brand Wordmark */}
-      <div className="flex items-center min-w-0">
+      {/* Zone 1: Brand Wordmark —— 窄屏与按钮组共占第一行，可收缩截断 */}
+      <div className="flex items-center min-w-0 flex-1 order-1">
         <span
-          className="text-base lg:text-lg font-bold font-display tracking-tight whitespace-nowrap truncate"
+          className="text-sm sm:text-base lg:text-lg font-bold font-display tracking-tight whitespace-nowrap truncate"
           style={{ color: scheme.onSurface }}
         >
           石墨工坊 · Graphite &amp; Cedar
         </span>
       </div>
 
-      {/* Zone 2: Live Economy Telemetry (unboxed tabular numerals) */}
-      <div className="flex items-center gap-4 text-xs sm:text-sm font-mono-tabular shrink-0">
+      {/* Zone 2: Live Economy Telemetry —— 窄屏整行单独落第二行，不与按钮抢宽度 */}
+      <div className="flex items-center gap-3 text-[11px] sm:text-sm font-mono-tabular shrink-0 w-full sm:w-auto order-3 sm:order-2">
         <div className="flex items-center gap-1.5 whitespace-nowrap">
           <span style={{ color: scheme.onSurfaceVariant }}>银元</span>
           <span className="font-bold" style={{ color: scheme.primary }}>
@@ -68,8 +68,8 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
         </div>
       </div>
 
-      {/* Zone 3: Theme, Audio & AOSP Spec Controls */}
-      <div className="flex items-center gap-1.5 shrink-0">
+      {/* Zone 3: Controls —— 5 个按钮保持 40×40 触控目标，窄屏只收紧间隙不缩按钮 */}
+      <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 order-2 sm:order-3">
         <Md3RippleSurface
           onClick={onCycleTheme}
           cornerRadius={20}
