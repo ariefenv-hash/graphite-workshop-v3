@@ -124,7 +124,7 @@ export function Md3SegmentedButton<T extends string>({
     <div
       role="group"
       aria-label={ariaLabel}
-      className="inline-flex rounded-full overflow-hidden shrink-0"
+      className="flex w-full min-w-0 rounded-full overflow-hidden"
       style={{ border: `1px solid ${scheme.outline}` }}
     >
       {options.map((opt, idx) => {
@@ -135,15 +135,15 @@ export function Md3SegmentedButton<T extends string>({
             cornerRadius={0}
             onClick={() => onChange(opt.value)}
             aria-pressed={selected}
-            className="min-h-[40px] px-3.5 text-xs font-medium whitespace-nowrap shrink-0 cursor-pointer transition-colors duration-150"
+            className="flex-1 min-w-0 min-h-[40px] px-2 sm:px-3.5 text-xs font-medium cursor-pointer transition-colors duration-150"
             style={{
               backgroundColor: selected ? scheme.secondaryContainer : 'transparent',
               color: selected ? scheme.onSecondaryContainer : scheme.onSurface,
               borderLeft: idx > 0 ? `1px solid ${scheme.outline}` : undefined,
             }}
           >
-            {selected && <Check className="w-3.5 h-3.5 shrink-0" strokeWidth={2.5} />}
-            <span>{opt.label}</span>
+            {selected && <Check className="hidden sm:block w-3.5 h-3.5 shrink-0" strokeWidth={2.5} />}
+            <span className="truncate">{opt.label}</span>
           </Md3RippleSurface>
         );
       })}
