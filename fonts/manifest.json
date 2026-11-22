@@ -1,0 +1,114 @@
+{
+  "files": [
+    {
+      "file": "serif-b0-w400-0.woff2",
+      "bytes": 214708,
+      "tag": "serif",
+      "batch": 0
+    },
+    {
+      "file": "serif-b0-w700-1.woff2",
+      "bytes": 214708,
+      "tag": "serif",
+      "batch": 0
+    },
+    {
+      "file": "serif-b1-w400-0.woff2",
+      "bytes": 250364,
+      "tag": "serif",
+      "batch": 1
+    },
+    {
+      "file": "serif-b1-w700-1.woff2",
+      "bytes": 250364,
+      "tag": "serif",
+      "batch": 1
+    },
+    {
+      "file": "serif-b2-w400-0.woff2",
+      "bytes": 261164,
+      "tag": "serif",
+      "batch": 2
+    },
+    {
+      "file": "serif-b2-w700-1.woff2",
+      "bytes": 261164,
+      "tag": "serif",
+      "batch": 2
+    },
+    {
+      "file": "serif-b3-w400-0.woff2",
+      "bytes": 278976,
+      "tag": "serif",
+      "batch": 3
+    },
+    {
+      "file": "serif-b3-w700-1.woff2",
+      "bytes": 278976,
+      "tag": "serif",
+      "batch": 3
+    },
+    {
+      "file": "serif-b4-w400-0.woff2",
+      "bytes": 289528,
+      "tag": "serif",
+      "batch": 4
+    },
+    {
+      "file": "serif-b4-w700-1.woff2",
+      "bytes": 289528,
+      "tag": "serif",
+      "batch": 4
+    },
+    {
+      "file": "serif-b5-w400-0.woff2",
+      "bytes": 280128,
+      "tag": "serif",
+      "batch": 5
+    },
+    {
+      "file": "serif-b5-w700-1.woff2",
+      "bytes": 280128,
+      "tag": "serif",
+      "batch": 5
+    },
+    {
+      "file": "serif-b6-w400-0.woff2",
+      "bytes": 106376,
+      "tag": "serif",
+      "batch": 6
+    },
+    {
+      "file": "serif-b6-w700-1.woff2",
+      "bytes": 106376,
+      "tag": "serif",
+      "batch": 6
+    },
+    {
+      "file": "display-w500-0.woff2",
+      "bytes": 54672,
+      "tag": "display"
+    },
+    {
+      "file": "display-w700-1.woff2",
+      "bytes": 54672,
+      "tag": "display"
+    },
+    {
+      "file": "mono-w400-0.woff2",
+      "bytes": 25872,
+      "tag": "mono"
+    },
+    {
+      "file": "mono-w500-1.woff2",
+      "bytes": 25872,
+      "tag": "mono"
+    },
+    {
+      "file": "mono-w600-2.woff2",
+      "bytes": 25872,
+      "tag": "mono"
+    }
+  ],
+  "batches": 7
+}
